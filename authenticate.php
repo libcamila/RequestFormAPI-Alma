@@ -1,14 +1,13 @@
 <?php
-$token      = !empty($token) ? $token : '';
-//if we have a token, we have already used EZProxy to authenticate (based on LDAP OR SAML authentication there). 
-if (isset($_REQUEST['token'])) {
-    $token      = $_REQUEST['token'];
+//Your authentication method may vary. We supplement our
+$token      = !empty($_REQUEST['token']) ? $_REQUEST['token'] : ''; //if we have a token, we have already used EZProxy to authenticate (based on LDAP OR SAML authentication there). 
+if (!empty($token )) { //we have gotten the token back and need to get the userobject to fill in some details
     $authstatus = authenticate(null, $from_proxy, $token);
 } else {
-        if ($authstatus == 'none') {
+        if (empty($authstatus) || $authstatus == 'none') {
             $request_str = '';
-            if (!empty($_REQUEST['goto'])) {
-                $request_str .= '?goto=' . $_REQUEST['goto'];
+            if (!empty($goto)) {
+                $request_str .= '?goto=' . $goto;
                 if ($_REQUEST['goto'] == 'reqform') {
                     include($_SERVER['DOCUMENT_ROOT'] . '/webFiles/delivery/sess_var.php');
                     $request_str .= '&' . $citation_data;
@@ -17,9 +16,7 @@ if (isset($_REQUEST['token'])) {
             $locationURL = "https://{$proxyAddress}/login?from_proxy=yes&url=https://{$proxyAddress}/userObject?service=getToken&returnURL=";
             $locationURL .= urlencode("https://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] . $request_str);
             header("location: $locationURL");
-        }
-        else{
-        $authstatus = authenticate($login, $from_proxy, $token);
+            $authstatus = authenticate($login, $from_proxy, $token);
         }
 }
 function authenticate($login, $from_proxy, $token)
@@ -43,13 +40,14 @@ function authenticate($login, $from_proxy, $token)
             $info_array[$iVarName] = $session_var;
         }
     }
-    $name    = $forename . ' ' . $surname;
-    $vnumber = $uid;
-    $univID  = !empty($note1) ? $note1 : $vnumber;
+    $name    = !empty($forename) ? $forename. ' ' : '';
+    $name    .= !empty($surname) ? $surname : '';
+    $IDnumber = !empty($uid) ? $uid : '';
+    $univID  = !empty($note1) ? $note1 : $IDnumber;
     //go finish populating the record in Alma
-    if (!empty($vnumber)) {
+    if (!empty($IDnumber)) {
         $queryParams = '?' . urlencode('apikey') . '=' . urlencode($apikey);
-        $service_url = 'https://api-eu.hosted.exlibrisgroup.com/almaws/v1/users/' . $vnumber;
+        $service_url = 'https://api-eu.hosted.exlibrisgroup.com/almaws/v1/users/' . $IDnumber;
         $curl        = curl_init();
         curl_setopt($curl, CURLOPT_URL, $service_url . $queryParams);
         curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'GET');
@@ -107,13 +105,13 @@ function authenticate($login, $from_proxy, $token)
     }
     $univStatus = getPatronCategory($category);
     $expires    = !empty($expires) ? $expires : date('m-d-Y', strtotime('yesterday'));
-    if (!empty($emailAddress) || !empty($vnumber)) {
+    if (!empty($emailAddress) || !empty($IDnumber)) {
         $_SESSION['libSession']['id']        = $univID;
         $_SESSION['libSession']['name']      = $name;
         $_SESSION['libSession']['lastname']  = $surname;
         $_SESSION['libSession']['firstname'] = $forename;
         $_SESSION['libSession']['status']    = $univStatus;
-        $_SESSION['libSession']['vnumber']   = $vnumber;
+        $_SESSION['libSession']['IDnumber']   = $IDnumber;
         $_SESSION['libSession']['number']    = $uid;
         $_SESSION['libSession']['ptype']     = $category;
         if (empty($email) && !empty($emails)) {

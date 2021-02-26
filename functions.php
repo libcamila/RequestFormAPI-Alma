@@ -88,8 +88,11 @@ function getHotSpotList($vnumber, $eligibilityURL)
     curl_close($ch);
     return $eligibility;
 }
-//function to either display a wah-wah message or send patron to correct form
+//function to either display a wah-wah message or send patron to correct form. 
 function redirectToForm($message,$url){
+//We redirect to Gravity forms within Wordpress. After they add addresses, phone numbers,
+// and other info, the form is submitted and pings either the update_address.php file then the place_hold.php file
+//or just the place_hold.php file.
 	if(!empty($message)){
 		include($GLOBALS['header']);
           print $message; 

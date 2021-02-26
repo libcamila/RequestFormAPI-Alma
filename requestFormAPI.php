@@ -19,10 +19,10 @@ $mmsid           = !empty($_REQUEST['mmsid']) ? $_REQUEST['mmsid'] : '';
 $authors         = !empty($_REQUEST['authors']) ? $_REQUEST['authors'] : '';
 $oclcnum         = !empty($_REQUEST['oclcnum']) ? $_REQUEST['oclcnum'] : '';
 //&issn=$issn&issue=$issue&volume=$volume&ericdoc=$ed&WOUOwns=Yes&sid=$sid&
-//base URL
-$digitizationURL = "https://library.wou.edu/digitization-request-form/?";
-$holdURL         = "https://library.wou.edu/request-pickup-or-mailing-of-hamersly-library-materials/?";
-$requestFormURL  = "https://library.wou.edu/request-form/?";
+//base URLs to your form(s) should be set here. 
+//$digitizationURL = "https://library.school.edu/form1/?";
+//$holdURL         = "https://library.school.edu/form2/?";
+//$requestFormURL  = "https://library.school.edu/form3/?";
 //get expiration from session variable
 $now             = new DateTime();
 $expires         = DateTime::createFromFormat('m-d-Y', $_SESSION['libSession']['expiration']); // our expiration is saved in m-d-Y format, yours may be different
@@ -40,9 +40,9 @@ if (isset($expires) && $expires > $now) {
     $firstname                = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : '';
     $lastname                 = !empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : '';
     $email                    = !empty($_SESSION['libSession']['email']) ? $_SESSION['libSession']['email'] : '';
-    $vnumber                  = !empty($_SESSION['libSession']['vnumber']) ? $_SESSION['libSession']['vnumber'] : '';
+    $IDnumber                  = !empty($_SESSION['libSession']['IDnumber']) ? $_SESSION['libSession']['IDnumber'] : '';
     $status                   = !empty($_SESSION['libSession']['status']) ? trim(stripslashes($_SESSION['libSession']['status'])) : '';
-    $patronParams    = "first=$firstname&last=$lastname&email=$email&vnumber=$vnumber&status=$status&";
+    $patronParams    = "first=$firstname&last=$lastname&email=$email&vnumber=$IDnumber&status=$status&";//patron paramaters to fill form - really should be sent as a post, but I'm working with what I've got
     //&requestType=" . $requestType
     if (!empty($_SESSION['libSession']['addresses'])) {
         foreach ($_SESSION['libSession']['addresses'] as $k => $v) {
@@ -108,15 +108,15 @@ if (isset($expires) && $expires > $now) {
         elseif (!empty($_REQUEST['mailform'])) {
         $requestType = !empty($_REQUEST['req_type']) ? $_REQUEST['req_type'] : 'hold';
         $eligibility = 'ELIGIBLE';
+        //we have two MMSIDs that our hotspot checkout program is attached to. If that is one of the records we are looking for, we need to verify teh student is eligible to check a hotspot out
         if ($_REQUEST['mms_id'] == '99900371275501856' || $_REQUEST['mms_id'] == '99900364672801856') {
-            $eligibility = getHotSpotList($vnumber);
+            $eligibility = getHotSpotList($IDnumber);
             if (empty($eligibility)) {
                 $eligibility = 'ELIGIBILE';
             }
         }
         if ($eligibility != 'NOT ELIGIBLE') {
             $url = $holdURL . $patronParams . "title=$title&date=$date&isbn=$isbn&authors=$authors&callnumber=$callNumber&description=$description&barcode=$barcode&mmsid=$mms_id&requestType=$requestType";
-            //$url .= http_build_query($address, 'flags_');
             $x   = 1;
             foreach ($address as $k => $v) {
                 foreach ($v as $k2 => $v2) {
