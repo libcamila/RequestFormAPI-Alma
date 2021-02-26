@@ -1,11 +1,11 @@
 <?php
 //the initial authentication and pull of data
-//SSO integration
-//sets $_SESSION['woulib] based on SAML and Alma attributes
-//our SAML data does not return an expiration date, so I have used the API to gather that as part of the login process for this and EZProxy
-include_once($_SERVER['DOCUMENT_ROOT'] . '/webFiles/login/top.php');
-include_once('functions.php');
 include_once('privateFunctions.php');
+//SSO integration
+//sets $_SESSION['libSession] based on SAML and Alma attributes
+//our SAML data does not return an expiration date, so I have used the API to gather that as part of the login process for this and EZProxy
+include_once('top.php');
+include_once('functions.php');
 //variables that are pulled from the URL sent by the General Electronic Service
 $callNumber      = !empty($_REQUEST['callNumber']) ? $_REQUEST['callNumber'] : '';
 $location        = !empty($_REQUEST['location']) ? $_REQUEST['location'] : '';
@@ -23,13 +23,12 @@ $oclcnum         = !empty($_REQUEST['oclcnum']) ? $_REQUEST['oclcnum'] : '';
 $digitizationURL = "https://library.wou.edu/digitization-request-form/?";
 $holdURL         = "https://library.wou.edu/request-pickup-or-mailing-of-hamersly-library-materials/?";
 $requestFormURL  = "https://library.wou.edu/request-form/?";
-$patronParams    = "first=$firstname&last=$lastname&email=$email&vnumber=$vnumber&status=$status&";
-//&requestType=" . $requestType
 //get expiration from session variable
 $now             = new DateTime();
-$expires         = DateTime::createFromFormat('m-d-Y', $_SESSION['woulib']['expiration']); // our expiration is saved in m-d-Y format, yours may be different
+$expires         = DateTime::createFromFormat('m-d-Y', $_SESSION['libSession']['expiration']); // our expiration is saved in m-d-Y format, yours may be different
 //if the are a current patron
 if (isset($expires) && $expires > $now) {
+	print '1';
     //for human readability and ease in locating, add the location to the call number, if that has been provided
     if (!empty($location)) {
         $callNumber = $callNumber . ' (' . $location . ')';
@@ -38,13 +37,15 @@ if (isset($expires) && $expires > $now) {
     $_REQUEST['request_type'] = !empty($_REQUEST['genre']) ? $_REQUEST['genre'] : '';
     $genre                    = $_REQUEST['request_type'];
     //why am I wasting resources doing this?
-    $firstname                = !empty($_SESSION['woulib']['firstname']) ? $_SESSION['woulib']['firstname'] : '';
-    $lastname                 = !empty($_SESSION['woulib']['lastname']) ? $_SESSION['woulib']['lastname'] : '';
-    $email                    = !empty($_SESSION['woulib']['email']) ? $_SESSION['woulib']['email'] : '';
-    $vnumber                  = !empty($_SESSION['woulib']['vnumber']) ? $_SESSION['woulib']['vnumber'] : '';
-    $status                   = !empty($_SESSION['woulib']['status']) ? trim(stripslashes($_SESSION['woulib']['status'])) : '';
-    if (!empty($_SESSION['woulib']['addresses'])) {
-        foreach ($_SESSION['woulib']['addresses'] as $k => $v) {
+    $firstname                = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : '';
+    $lastname                 = !empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : '';
+    $email                    = !empty($_SESSION['libSession']['email']) ? $_SESSION['libSession']['email'] : '';
+    $vnumber                  = !empty($_SESSION['libSession']['vnumber']) ? $_SESSION['libSession']['vnumber'] : '';
+    $status                   = !empty($_SESSION['libSession']['status']) ? trim(stripslashes($_SESSION['libSession']['status'])) : '';
+    $patronParams    = "first=$firstname&last=$lastname&email=$email&vnumber=$vnumber&status=$status&";
+    //&requestType=" . $requestType
+    if (!empty($_SESSION['libSession']['addresses'])) {
+        foreach ($_SESSION['libSession']['addresses'] as $k => $v) {
             $lines = '';
             foreach ($v['line'] as $k2 => $v2) {
                 if (!empty($v2)) {
@@ -62,8 +63,8 @@ if (isset($expires) && $expires > $now) {
             unset($k, $v, $this_address);
         }
     }
-    if (!empty($_SESSION['woulib']['phones'])) {
-        foreach ($_SESSION['woulib']['phones'] as $k => $v) {
+    if (!empty($_SESSION['libSession']['phones'])) {
+        foreach ($_SESSION['libSession']['phones'] as $k => $v) {
             $thisPhone['number'] = $v['phone_number'];
             if (!empty($v['preferred_sms'])) {
                 $thisPhone['sms'] = ($v['preferred_sms'] == 1) ? $v['preferred_sms'] : '';
@@ -78,9 +79,9 @@ if (isset($expires) && $expires > $now) {
         $title .= " ($description)";
     }
     /*This form (video digitization) is only available to faculty. Give a message stating this to others.*/
-    if (!preg_match('/faculty/i', strtolower($_SESSION['woulib']['status'])) && $genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes') {
+    if (!preg_match('/faculty/i', strtolower($_SESSION['libSession']['status'])) && $genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes') {
         $message = '<p>Video digitization is only available to faculty. If you are a faculty member and are seeing this message, please contact the library (libweb@wou.edu)</p>';
-        $message .= 'Your status is: ' . $_SESSION['woulib']['status'];
+        $message .= 'Your status is: ' . $_SESSION['libSession']['status'];
         redirectToForm($message, null);
     } elseif ($genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes' && empty($_REQUEST['mailform'])) {
         $url = $digitizationURL . $patronParams . "title=$title&date=$date&isbn=$isbn&oclcnum=$oclcnum&authors=$authors&callNumber=$callNumber&description=$description&WOUOwns=Yes&format=Video";
