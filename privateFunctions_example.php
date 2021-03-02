@@ -10,6 +10,8 @@ $basedn      = "ou=People,dc=school,dc=edu";
 $proxyAddress = 'ezproxy.school.edu';
 $emailDomain = 'school.edu';
 $portalURL = '';
+$GLOBALS['header'] = "path to your header";
+$GLOBALS['footer'] = "path to your footer";
 
 function portalVerify(){
 	$portalVars = array();
