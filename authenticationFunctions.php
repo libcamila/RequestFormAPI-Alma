@@ -2,21 +2,35 @@
 //main authentication function
 function authenticate($login, $from_proxy, $token)
 {
+	//error_reporting(E_ERROR | E_WARNING | E_PARSE);
+	//ini_set('display_errors', '1');
     global $OCLCwskey, $apikey, $emailDomain;
     //authenticate and get the base info from EZPROXY. This is based on the great post by Brice Stacey at: http://bricestacey.com/2009/07/21/Single-Sign-On-Authentication-Using-EZProxy-UserObjects.html
     $url = $token . '&service=getUserObject&wskey=' . $OCLCwskey;
     $obj   = getUserObject($url);
-    $xml = new SimpleXmlElement($obj, LIBXML_NOCDATA);
+    $xml = new SimpleXmlElement($obj); //, LIBXML_NOCDATA
+    $userJSON = json_encode($xml);
+    $userObject = json_decode($userJSON ,true);
+    //print(json_encode($xml));
+    //$xml = $xml->asXML();
     //this is all very ugly. I hate XML.
-    foreach ($xml->children() as $child) {
-        $iVarName  = $child->getName();
+    foreach($userObject['userDocument'] as $k => $v){
+		//print $k;
+		$$k = $v;
+		unset($k,$v);
+	}
+    /*foreach ($xml->children() as $child) {
+		
+        $iVarName  =  $child->getName();
         $$iVarName = $child;
         foreach ($child->children() as $session_var) {
-            $iVarName              = $session_var->getName();
+			//print_r($session_var);
+            $iVarName              = (string) $session_var->getName();
             $$iVarName             = $session_var;
             $info_array[$iVarName] = $session_var;
         }
-    }
+    }*/
+    unset($xml);
     $name = !empty($forename) ? $forename . ' ' : '';
     $name .= !empty($surname) ? $surname : '';
     $IDnumber = !empty($uid) ? $uid : '';

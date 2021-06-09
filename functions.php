@@ -76,6 +76,7 @@ function bibLevelHold($pid, $mmsid, $makeRequest, $queryParams)
 //We have a call to housing's system to verify whether someone is a resident or not (residents are not eligible for hotspots)
 function getHotSpotList($vnumber, $eligibilityURL)
 {
+	print $eligibilityURL;
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $eligibilityURL . $vnumber);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);

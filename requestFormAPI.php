@@ -1,11 +1,21 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 //the initial authentication and pull of data
+if (empty(session_id()) && !isset($_SESSION)  && session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+//include($_SERVER['DOCUMENT_ROOT'].'/webFiles/login/top.php');
 include_once('privateFunctions.php');
 //SSO integration
 //sets $_SESSION['libSession] based on SAML and Alma attributes
 //our SAML data does not return an expiration date, so I have used the API to gather that as part of the login process for this and EZProxy
 include_once('functions.php');
 include_once('authenticate.php');
+if (isset($_SESSION['woulib']) && isset($_SESSION['libSession'])){
+	$_SESSION['libSession'] = $_SESSION['woulib'];
+}
 //variables that are pulled from the URL sent by the General Electronic Service
 $callNumber      = !empty($_REQUEST['callNumber']) ? $_REQUEST['callNumber'] : '';
 $location        = !empty($_REQUEST['location']) ? $_REQUEST['location'] : '';
@@ -25,19 +35,24 @@ $details         = !empty($_REQUEST['details']) ? $_REQUEST['details'] : ''; //f
 //$holdURL         = "https://library.school.edu/form2/?";
 //$requestFormURL  = "https://library.school.edu/form3/?";
 //$reserveFormURL  = "https://library.school.edu/form3/?";
+$top_html             = '<link type="text/css" rel="stylesheet" href="//ezproxy.wou.edu/public/proxy.css" /><style>input[type=text] {width:auto;}</style><div style="padding:1em;"> 
+<div style="width:100%;min-height:80px;text-align:left;margin-bottom:2em;"><a href="https://library.wou.edu/" target="_blank"><img src="/webFiles/images/logos/woulib_logos/HL_logo_2Color_on_transparent.png" alt="WOU Library logo space" style="max-height:130px;"></a></div>';
 //get expiration from session variable
 $now             = new DateTime();
+//print_r($_SESSION['libSession']);
 $expires         = DateTime::createFromFormat('m-d-Y', $_SESSION['libSession']['expiration']); // our expiration is saved in m-d-Y format, yours may be different
 //if the are a current patron
 if (isset($expires) && $expires > $now) {
 	
     if (empty($_REQUEST['formType'])){
+		unset($_REQUEST['mailform']);
 		$message = '<style>body {padding:1em;}</style><form action="'.$_SERVER["SELF"].'" style="padding:1em;">';
-		$message .= 'I am requesting:<br>';
-		$message .= '<input type="radio" name="formType" value="mailform"> This be mailed to me in a physical format or held at the library for pick up<br>';
+		$message .= $top_html;
+		$message .= '<strong>I am requesting:</strong><br>';
+		$message .= '<input type="radio" name="formType" value="mailform"> This be mailed to me or held at the library for pick up<br>';
 		$message .= '<input type="radio" name="formType" value="scananddeliv"> A portion of this be digitized and sent directly to me<br>';
 		if(!preg_match('/student/i', $status)) {
-		$message .= '<input type="radio" name="formType" value="reserves"> This be digitized and made available to my students through the library\'s digital reserves system (print items only)<br>';
+		$message .= '<input type="radio" name="formType" value="cdl"> This be digitized and made available to my students through the library\'s <a href="https://research.wou.edu/CDL" target="_blank">digital reserves system</a> (print items only)<br>';
 		$message .= '<input type="radio" name="formType" value="videoDigitization"> This be digitized and made embeddable in my Canvas or Moodle shell (videos only)';
 		}
 		foreach($_REQUEST as $k => $v){
@@ -104,6 +119,7 @@ if (isset($expires) && $expires > $now) {
 		if (!empty($description)) {
 			$title .= " ($description)";
 		}
+		
 		/*This form (video digitization) is only available to faculty. Give a message stating this to others.*/
 		if (!preg_match('/faculty/i', strtolower($_SESSION['libSession']['status'])) && $genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes') {
 			$message = '<p>Video digitization is only available to faculty. If you are a faculty member and are seeing this message, please contact the library (libweb@wou.edu)</p>';
@@ -136,7 +152,7 @@ if (isset($expires) && $expires > $now) {
 			$eligibility = 'ELIGIBLE';
 			//we have two MMSIDs that our hotspot checkout program is attached to. If that is one of the records we are looking for, we need to verify teh student is eligible to check a hotspot out
 			if ($_REQUEST['mms_id'] == '99900371275501856' || $_REQUEST['mms_id'] == '99900364672801856') {
-				$eligibility = getHotSpotList($IDnumber);
+				$eligibility = getHotSpotList($IDnumber, $eligibilityURL);
 				if (empty($eligibility)) {
 					$eligibility = 'ELIGIBILE';
 				}
@@ -168,13 +184,19 @@ if (isset($expires) && $expires > $now) {
 				}
 				redirectToForm(null, $url);
 			} else {
+				print $eligibility;
 				$message = '<p>&nbsp;</p><p>iPad requesting is limited to students enrolled in specific courses. You do not appear to be enrolled in one of those courses.</p><p>If you believe this is incorrect, please <a href="https://library.wou.edu">contact the library</a> (libweb@wou.edu)</p>';
 				redirectToForm($message, null);
 			}
 		} 
+		elseif (!empty($cdl)) {
+			$detailsStr = "Title:%20{$title}%0ADate:%20{$date}%0AISBN:%20{$isbn}%0AVolume:%20{$volume}%0AMMSID:%20{$mmsid}%0AType:%20{$genre}%0AcallNumber:%20{$callNumber}%0Adescription:%20{$description}%0Alocation:%20{$location}";
+			$url = $reserveFormURL . $patronParams . "patronName={$firstname}+{$lastname}&details={$detailsStr}&WOUOwns=yes&reserveType=CDL";
+			redirectToForm(null, $url);
+		}
 		elseif (!empty($reserves)) {
 			$detailsStr = "Title:%20{$title}%0ADate:%20{$date}%0AISBN:%20{$isbn}%0AVolume:%20{$volume}%0AMMSID:%20{$mmsid}%0AType:%20{$genre}%0AcallNumber:%20{$callNumber}%0Adescription:%20{$description}%0Alocation:%20{$location}";
-			$url = $reserveFormURL . $patronParams . "&details={$detailsStr}";
+			$url = $reserveFormURL . $patronParams . "patronName={$firstname}+{$lastname}&details={$detailsStr}&WOUOwns=yes&reserveType=reserves";
 			redirectToForm(null, $url);
 		}else {
 			$url = $requestFormURL . $patronParams . "&title={$title}&date={$date}&isbn={$isbn}&authors={$authors}";
