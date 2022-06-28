@@ -85,11 +85,12 @@ if (!empty($_REQUEST['line1'])) {
     // add it to the patronRecord object
     $patronRecord->contact_info->{"address"} = $addresses;
 }
-if (!empty($_REQUEST['usePhone'])) {
+    $phNumbers                 = $patronRecord->contact_info->phone;
     $newNumber['preferred']     = true;
     $newNumber['preferred_sms'] = true;
     $newNumber['segment_type']  = "Internal";
     $newNumber['phone_number']  = !empty($_REQUEST['newPhone']) ? preg_replace('/[^0-9]/i', '', $_REQUEST['newPhone']) : null;
+if (!empty($_REQUEST['usePhone'])) {
     if (empty($newNumber['phone_number'])) {
         $usePhoneNo                = preg_replace('/[A-za-z ]/i', '', $_REQUEST['usePhone']);
         $usePhoneNo                = $usePhoneNo - 1;
@@ -99,7 +100,6 @@ if (!empty($_REQUEST['usePhone'])) {
     $phoneType['desc']         = 'Mobile';
     $newNumber['phone_type'][] = $phoneType;
     $numberExists              = 'no';
-    $phNumbers                 = $patronRecord->contact_info->phone;
     $phones                    = (array) $phNumbers;
     //convert our array to an object
     $newNumber = (object) $newNumber;
@@ -123,8 +123,10 @@ if (!empty($_REQUEST['usePhone'])) {
 		}
 }
 else {
-        //we didn't have an address for the patron. Better add one.
+	 if (!isset($phNumbers)) {
+        //we didn't have a phone for the patron. Better add one.
         $phNumbers[0] = $newNumber;
+		}
     }
      $patronRecord->contact_info->{"phone"} = $phNumbers;
      //let's just not mess with user roles. By not including them in what we send back, we don't accidentally overwrite something

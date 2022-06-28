@@ -1,7 +1,7 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+//ini_set('display_errors', 1);
+//error_reporting(E_ERROR | E_WARNING | E_PARSE);
+//ini_set('display_errors', '1');
 //the initial authentication and pull of data
 if (empty(session_id()) && !isset($_SESSION)  && session_status() == PHP_SESSION_NONE) {
     session_start();
@@ -13,9 +13,11 @@ include_once('privateFunctions.php');
 //our SAML data does not return an expiration date, so I have used the API to gather that as part of the login process for this and EZProxy
 include_once('functions.php');
 include_once('authenticate.php');
-if (isset($_SESSION['woulib']) && isset($_SESSION['libSession'])){
+if (isset($_SESSION['woulib']) && !isset($_SESSION['libSession'])){
 	$_SESSION['libSession'] = $_SESSION['woulib'];
 }
+//I would like to eventually include this file, but it has a jquery dependency, so I'll need to add that first
+//include('viewas.php');
 //variables that are pulled from the URL sent by the General Electronic Service
 $callNumber      = !empty($_REQUEST['callNumber']) ? $_REQUEST['callNumber'] : '';
 $location        = !empty($_REQUEST['location']) ? $_REQUEST['location'] : '';
@@ -25,41 +27,53 @@ $date            = !empty($_REQUEST['date']) ? $_REQUEST['date'] : '';
 $date            = (!empty($date) && $date != '19691231' && $date != '1969-12-31') ? str_replace('0101', '', $date) : '';
 $isbn            = !empty($_REQUEST['isbn']) ? $_REQUEST['isbn'] : '';
 $barcode         = !empty($_REQUEST['barcode']) ? $_REQUEST['barcode'] : '';
-$mmsid           = !empty($_REQUEST['mmsid']) ? $_REQUEST['mmsid'] : '';
+$mmsid           = !empty($_REQUEST['mms_id']) ? $_REQUEST['mms_id'] : '';
 $authors         = !empty($_REQUEST['authors']) ? $_REQUEST['authors'] : '';
 $oclcnum         = !empty($_REQUEST['oclcnum']) ? $_REQUEST['oclcnum'] : '';
 $details         = !empty($_REQUEST['details']) ? $_REQUEST['details'] : ''; //for reserves/booking form text field
 //&issn=$issn&issue=$issue&volume=$volume&ericdoc=$ed&WOUOwns=Yes&sid=$sid&
-//base URLs to your form(s) should be set here. 
+//base URLs to your form(s) should be set here.
 //$digitizationURL = "https://library.school.edu/form1/?";
 //$holdURL         = "https://library.school.edu/form2/?";
 //$requestFormURL  = "https://library.school.edu/form3/?";
 //$reserveFormURL  = "https://library.school.edu/form3/?";
-$top_html             = '<link type="text/css" rel="stylesheet" href="//ezproxy.wou.edu/public/proxy.css" /><style>input[type=text] {width:auto;}</style><div style="padding:1em;"> 
-<div style="width:100%;min-height:80px;text-align:left;margin-bottom:2em;"><a href="https://library.wou.edu/" target="_blank"><img src="/webFiles/images/logos/woulib_logos/HL_logo_2Color_on_transparent.png" alt="WOU Library logo space" style="max-height:130px;"></a></div>';
+$hotspotURL = "https://library.wou.edu/hotspots/";
+$top_html             = '<style>input[type=text] {width:auto;}</style><div style="padding:1em;">
+<div style="width:100%;min-height:80px;text-align:left;margin-bottom:2em;" id="toplogo"><a href="https://library.wou.edu/" target="_blank"><img src="/webFiles/images/logos/woulib_logos/HL_logo_2Color_on_transparent.png" alt="WOU Library logo space" style="max-height:130px;"></a></div>';
 //get expiration from session variable
 $now             = new DateTime();
 //print_r($_SESSION['libSession']);
 $expires         = DateTime::createFromFormat('m-d-Y', $_SESSION['libSession']['expiration']); // our expiration is saved in m-d-Y format, yours may be different
 //if the are a current patron
 if (isset($expires) && $expires > $now) {
-	
+	//redirect to the Google form for Hotspots
+	if (!empty($mmsid) && ($mmsid == '99900414776101856' || $mmsid == '99900391873201856')){
+		header("location: $hotspotURL;");
+	}
+
+		$firstname                = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : '';
+		$lastname                 = !empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : '';
+		$email                    = !empty($_SESSION['libSession']['email']) ? $_SESSION['libSession']['email'] : '';
+		$IDnumber                  = !empty($_SESSION['libSession']['IDnumber']) ? $_SESSION['libSession']['IDnumber'] : '';
+		$status                   = !empty($_SESSION['libSession']['status']) ? trim(stripslashes($_SESSION['libSession']['status'])) : '';
     if (empty($_REQUEST['formType'])){
 		unset($_REQUEST['mailform']);
 		$message = '<style>body {padding:1em;}</style><form action="'.$_SERVER["SELF"].'" style="padding:1em;">';
 		$message .= $top_html;
-		$message .= '<strong>I am requesting:</strong><br>';
-		$message .= '<input type="radio" name="formType" value="mailform"> This be mailed to me or held at the library for pick up<br>';
-		$message .= '<input type="radio" name="formType" value="scananddeliv"> A portion of this be digitized and sent directly to me<br>';
+		$message .= '<p><strong>I am requesting:</strong></p>';
+		$message .= '<p></p><input type="radio" name="formType" value="mailform"> This be mailed to me or held at the library/WOU Salem for pick up<br>';
+		$message .= '<input type="radio" name="formType" value="scananddeliv"> A portion of this be digitized and sent directly to me</p>';
 		if(!preg_match('/student/i', $status)) {
-		$message .= '<input type="radio" name="formType" value="cdl"> This be digitized and made available to my students through the library\'s <a href="https://research.wou.edu/CDL" target="_blank">digital reserves system</a> (print items only)<br>';
-		$message .= '<input type="radio" name="formType" value="videoDigitization"> This be digitized and made embeddable in my Canvas or Moodle shell (videos only)';
+		$message .= '<p><strong>Faculty Only:</strong></p>';
+		$message .= '<p><input type="radio" name="formType" value="cdl"> This be digitized and made available to my students through the library\'s <a href="https://research.wou.edu/CDL" target="_blank">digital reserves system</a> (print items only)<br>';
+		$message .= '<input type="radio" name="formType" value="reserves"> This be made available to my students through the library\'s print reserves system or be booked for a specific date for use in the classroom (physical items only)<br>';
+		$message .= '<input type="radio" name="formType" value="videoDigitization"> This be digitized and made embeddable in my Canvas or Moodle shell (videos only)</p>';
 		}
 		foreach($_REQUEST as $k => $v){
 			$message .=  "<input type=\"hidden\" name=\"{$k}\" value=\"{$v}\">";
 			unset($k,$v);
 		}
-		$message .= '<br><input type="submit"></form>';
+		$message .= '<br><input type="submit" value="Submit"></form>';
 		if (!empty($isbn)){
 			$message .= "<p>Alternately, <a href=\"https://library.wou.edu/webFiles/scripts/NEL.php?title={$title}&isbn={$isbn}&primo=yes\">Check the free Internet Archive</a> for immediate online availability.</p>";
 		}
@@ -73,16 +87,10 @@ if (isset($expires) && $expires > $now) {
 			$callNumber = $callNumber . ' (' . $location . ')';
 		}
 		if (!empty($formType)){$$formType = 'yes';}
-		
+
 		// for digitization form
 		$_REQUEST['request_type'] = !empty($_REQUEST['genre']) ? $_REQUEST['genre'] : '';
 		$genre                    = $_REQUEST['request_type'];
-		//why am I wasting resources doing this?
-		$firstname                = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : '';
-		$lastname                 = !empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : '';
-		$email                    = !empty($_SESSION['libSession']['email']) ? $_SESSION['libSession']['email'] : '';
-		$IDnumber                  = !empty($_SESSION['libSession']['IDnumber']) ? $_SESSION['libSession']['IDnumber'] : '';
-		$status                   = !empty($_SESSION['libSession']['status']) ? trim(stripslashes($_SESSION['libSession']['status'])) : '';
 		$patronParams    = "first=$firstname&last=$lastname&email=$email&vnumber=$IDnumber&status=$status&";//patron paramaters to fill form - really should be sent as a post, but I'm working with what I've got
 		//&requestType=" . $requestType
 		if (!empty($_SESSION['libSession']['addresses'])) {
@@ -119,10 +127,15 @@ if (isset($expires) && $expires > $now) {
 		if (!empty($description)) {
 			$title .= " ($description)";
 		}
-		
+
 		/*This form (video digitization) is only available to faculty. Give a message stating this to others.*/
-		if (!preg_match('/faculty/i', strtolower($_SESSION['libSession']['status'])) && $genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes') {
+		if (!preg_match('/faculty/i', strtolower($_SESSION['libSession']['status'])) && !preg_match('/staff/i', strtolower($_SESSION['libSession']['status'])) && (($genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes') || (isset($cdl) && $cdl == 'yes') || (isset($reserves) && $reserves == 'yes')))  {
+			if($genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes'){
 			$message = '<p>Video digitization is only available to faculty. If you are a faculty member and are seeing this message, please contact the library (libweb@wou.edu)</p>';
+			}
+			else {
+				$message = '<p>Only course instructors may place items on reserve.</p>';
+				}
 			$message .= 'Your status is: ' . $_SESSION['libSession']['status'];
 			redirectToForm($message, null);
 		} elseif (($genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes' && empty($_REQUEST['mailform']) && empty($_mailform)) || $videoDigitization == 'yes') {
@@ -175,6 +188,7 @@ if (isset($expires) && $expires > $now) {
 						$url .= '* This is currently selected as your SMS number';
 						$url .= '&smsPhone=phone' . $x . '&wantSMS=Yes';
 						$url .= '&sms=' . $v['sms'];
+						$url .= '&smsNumber=' . $v['number'];
 					}
 					unset($k, $v);
 					$x++;
@@ -188,7 +202,7 @@ if (isset($expires) && $expires > $now) {
 				$message = '<p>&nbsp;</p><p>iPad requesting is limited to students enrolled in specific courses. You do not appear to be enrolled in one of those courses.</p><p>If you believe this is incorrect, please <a href="https://library.wou.edu">contact the library</a> (libweb@wou.edu)</p>';
 				redirectToForm($message, null);
 			}
-		} 
+		}
 		elseif (!empty($cdl)) {
 			$detailsStr = "Title:%20{$title}%0ADate:%20{$date}%0AISBN:%20{$isbn}%0AVolume:%20{$volume}%0AMMSID:%20{$mmsid}%0AType:%20{$genre}%0AcallNumber:%20{$callNumber}%0Adescription:%20{$description}%0Alocation:%20{$location}";
 			$url = $reserveFormURL . $patronParams . "patronName={$firstname}+{$lastname}&details={$detailsStr}&WOUOwns=yes&reserveType=CDL";

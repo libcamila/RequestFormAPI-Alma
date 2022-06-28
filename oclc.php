@@ -1,10 +1,8 @@
 <?php
 //this page's sole purpose is completing citation data by geting the record from OCLC.
 if (!empty($oclcnum) || !empty($_REQUEST['oclcnum'])) {
-    if (empty($oclcnum)) {
-        $oclcnum = $_REQUEST['oclcnum'];
-    }
-    $isn = $oclcnum;
+        $oclcnum = !empty($oclcnum) ? $oclcnum : $_REQUEST['oclcnum'];
+		$isn = $oclcnum;
 } elseif (!empty($isbn) || !empty($_REQUEST['isbn'])) {
     if (empty($isbn)) {
         $isbn = $_REQUEST['isbn'];
@@ -25,7 +23,7 @@ $oclc_json  = json_encode($xml, JSON_PRETTY_PRINT);
 $oclc_array = json_decode($oclc_json, TRUE);
 //the most important piece of info we need if we don't already have it is the OCLC#
 if (empty($oclcnum)) {
-    $oclcnum = $oclc_array['controlfield'][0];
+    $oclcnum = isset($oclc_array['controlfield'][0]) ? $oclc_array['controlfield'][0] : '';
 }
 //if we need data and have an array, let's go get it
 if ((empty($issn) && empty($isbn) || empty($title) || empty($date)) && isset($oclc_array)) {
@@ -39,14 +37,10 @@ if ((empty($issn) && empty($isbn) || empty($title) || empty($date)) && isset($oc
         }
         if ($q['@attributes']['tag'] == '020' && empty($isbn)) {
 			//just get the first one, if it is an array of isbns
-            if (is_array($q['subfield'])) {
-                $isbn = $q['subfield'][0];
-            } else {
-                $isbn = $q['subfield'];
-            }
+            $isbn = is_array($q['subfield']) ? $q['subfield'][0] : $q['subfield'];
         }
-        if ($q['@attributes']['tag'] == '245') {
-            $title = trim($q['subfield'][0] . ' ' . $q['subfield'][1]);
+        if ($q['@attributes']['tag'] == '245' && empty($title)) { //only update the title if we don't have it or summit will break
+            $title = !is_array($q['subfield']) ? trim($q['subfield']) : trim($q['subfield'][0] . ' ' . $q['subfield'][1]);
         }
         if ($q['@attributes']['tag'] == '260' && empty($date) && empty($issn)) {
             foreach ($q['subfield'] as $k => $v) {

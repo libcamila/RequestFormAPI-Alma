@@ -4,7 +4,8 @@ function authenticate($login, $from_proxy, $token)
 {
 	//error_reporting(E_ERROR | E_WARNING | E_PARSE);
 	//ini_set('display_errors', '1');
-    global $OCLCwskey, $apikey, $emailDomain;
+    global $OCLCwskey, $apikey, $emailDomain, $viewas;
+    if(empty($viewas)){
     //authenticate and get the base info from EZPROXY. This is based on the great post by Brice Stacey at: http://bricestacey.com/2009/07/21/Single-Sign-On-Authentication-Using-EZProxy-UserObjects.html
     $url = $token . '&service=getUserObject&wskey=' . $OCLCwskey;
     $obj   = getUserObject($url);
@@ -20,7 +21,7 @@ function authenticate($login, $from_proxy, $token)
 		unset($k,$v);
 	}
     /*foreach ($xml->children() as $child) {
-		
+
         $iVarName  =  $child->getName();
         $$iVarName = $child;
         foreach ($child->children() as $session_var) {
@@ -31,17 +32,27 @@ function authenticate($login, $from_proxy, $token)
         }
     }*/
     unset($xml);
-    $name = !empty($forename) ? $forename . ' ' : '';
-    $name .= !empty($surname) ? $surname : '';
     $IDnumber = !empty($uid) ? $uid : '';
     $univID   = !empty($note1) ? $note1 : $IDnumber;
+	}
+	else {
+
+		$IDnumber = $viewas;
+	}
     //go finish populating the record in Alma
     if (!empty($IDnumber)) {
         $queryParams   = '?' . urlencode('apikey') . '=' . urlencode($apikey);
-        $service_url   = 'https://api-eu.hosted.exlibrisgroup.com/almaws/v1/users/' . $IDnumber;
+        $service_url   = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/' . $IDnumber;
         //user CURL to get record
-        $curl_response = getAlmaRecord($_REQUEST['pid'], $service_url, $queryParams);
+        $curl_response = getAlmaRecord($IDnumber, $service_url, $queryParams);
         $patronRecord  = json_decode($curl_response);
+        //print_r($patronRecord);
+        if(!empty($viewas)){$IDnumber = $patronRecord->primary_id ? $patronRecord->primary_id : $IDnumber;}
+        $surname = !empty($patronRecord->pref_last_name) ? $patronRecord->pref_last_name : (!empty($patronRecord->last_name) ? $patronRecord->last_name : $surname); //pref_last_name
+        $forename = !empty($patronRecord->pref_first_name) ? $patronRecord->pref_first_name : (!empty($patronRecord->first_name) ? $patronRecord->first_name : $forename);
+        //utf-8 encoding is choking some forms. Taking it off for now.
+        $surname = iconv("UTF-8", "ASCII//TRANSLIT", $surname);
+        $forename = iconv("UTF-8", "ASCII//TRANSLIT", $forename);
         foreach ($patronRecord->contact_info->address as $key => $mailing) {
             $addresses[$key]['preferred'] = !empty($mailing->preferred) ? $mailing->preferred : '';
             $addresses[$key]['city']      = !empty($mailing->city) ? $mailing->city : '';
@@ -82,6 +93,8 @@ function authenticate($login, $from_proxy, $token)
             $expires = date('m-d-Y', strtotime($expires . ' +2 weeks'));
         }
     }
+    $name = !empty($forename) ? $forename . ' ' : '';
+    $name .= !empty($surname) ? $surname : '';
     $category = !empty($category) ? $category : $ptype;
     if (empty($category)) {
         $category = 'none';
@@ -90,7 +103,6 @@ function authenticate($login, $from_proxy, $token)
     $expires    = !empty($expires) ? $expires : date('m-d-Y', strtotime('yesterday'));
     //if we have the info, set the session
     if (!empty($emailAddress) || !empty($IDnumber)) {
-        $_SESSION['libSession']['id']        = $univID;
         $_SESSION['libSession']['name']      = $name;
         $_SESSION['libSession']['lastname']  = $surname;
         $_SESSION['libSession']['firstname'] = $forename;
@@ -100,8 +112,11 @@ function authenticate($login, $from_proxy, $token)
         $_SESSION['libSession']['ptype']     = $category;
         if (empty($email) && !empty($emails)) {
             foreach ($emails as $k => $v) {
-                if ($v['preferred'] == true || $v['preferred'] == 1 || (str_match($emailDomain, $v['email_address']) && empty($email))) {
+                if ($v['preferred'] == true || $v['preferred'] == 1 || (preg_match('/'.$emailDomain.'/i', $v['email_address']) && empty($email))) {
                     $email = $v['email_address'];
+                    if(!empty($viewas)){
+                    $univID   = preg_replace('/@(mail.)?wou.edu/i', '', $email);
+					}
                 }
                 unset($k, $v);
             }
@@ -114,6 +129,7 @@ function authenticate($login, $from_proxy, $token)
                 unset($k, $v);
             }
         }
+        $_SESSION['libSession']['id']        = $univID;
         $_SESSION['libSession']['email']      = !empty($email) ? $email : '';
         $_SESSION['libSession']['phone']      = !empty($phone) ? $phone : '';
         $_SESSION['libSession']['info_array'] = $info_array;
