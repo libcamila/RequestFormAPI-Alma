@@ -1,5 +1,9 @@
 <?php
+$forJSON = !empty($forJSON) ? $forJSON : (!empty($_REQUEST['forJSON']) ? $_REQUEST['forJSON'] :'');
 if ($_SESSION['libSession']['email'] == 'gabaldoc@wou.edu' || $savelogin == 'gabaldoc' || $_SESSION['libSession']['savelogin'] == 'gabaldoc' || (($savelogin == 'bakersc' || $_SESSION['libSession']['savelogin'] == 'bakersc' || $_SESSION['libSession']['id'] == 'bakersc')) || (preg_match('/placeHold/', $_SERVER['REQUEST_URI']) && !empty($_REQUEST['req_type']) && $_REQUEST['req_type'] == 'hotspot')){
+
+// but are we testing the system as someone else? If so we need to set permissions as them
+$savelogin =  !empty($login) ?$login : (!empty($_SESSION['libSession']['id']) ? $_SESSION['libSession']['id'] : preg_replace('/@wou.edu/i','', $_SESSION['libSession']['email']));
 	if(empty($forJSON)){
 ?>
 <script>
@@ -20,24 +24,19 @@ if ($_SESSION['libSession']['email'] == 'gabaldoc@wou.edu' || $savelogin == 'gab
 
 <?php
 	}
-    if (!empty($_POST['viewas']) ) {$_POST['viewas'] = trim($_POST['viewas']);
-                                    $_REQUEST['viewas'] = trim($_REQUEST['viewas']);}
+    if (!empty($_POST['viewas']) ) {
+		$_POST['viewas'] = trim($_POST['viewas']);
+		$_REQUEST['viewas'] = trim($_REQUEST['viewas']);
+		}
 if (!empty($_REQUEST['viewas']) && $_SESSION['libSession']['id'] != $_REQUEST['viewas']) {
-// but are we testing the system as someone else? If so we need to set permissions as them
-if(!empty($login)){
-		$savelogin                       =  $login;
-}
-elseif(!empty($_SESSION['libSession']['id'])){
-
-		$savelogin                       =  $_SESSION['libSession']['id'];
-}
+	//print '!';
 		$viewas = !empty($_REQUEST['viewas']) ? $_REQUEST['viewas'] : '';
 		// || (!empty($_REQUEST['userid']) && $_SESSION['libSession']['id'] != $_REQUEST['userid'])
 			if ((!empty($_REQUEST['viewas']) && $_SESSION['libSession']['id'] != $_REQUEST['viewas'])) {
                 unset($_SESSION['libSession']);
 				//if (!empty($_REQUEST['viewas'])) {
-				$login                      = $_REQUEST['viewas'];
-				$view_as                         = $_REQUEST['viewas'];
+				$login  = $viewas;
+				$view_as = $viewas;
 				/*}
 				elseif (!empty($_REQUEST['userid']))
 				{$login                      = $_REQUEST['userid'];
@@ -45,8 +44,8 @@ elseif(!empty($_SESSION['libSession']['id'])){
             $staff_request                   = 'yes';
             $id                              = $login;
             //run the authenticate script. This also happened as part of the login, but if we're testing, we want to authenticate against the test credentials, not neccessarily the loggedin user
-            authenticate($login, $from_proxy, $token);
-            $_SESSION['libSession']['savelogin'] = $savelogin;
+           // print $login;
+            authenticatePerson($login, $from_proxy, $token);
             if(empty($forJSON)){
                 ?>
 <script>

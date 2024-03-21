@@ -1,7 +1,7 @@
 <?php
 //error logging for troubelshooting
-error_reporting(E_ERROR | E_WARNING | E_PARSE);
-ini_set('display_errors', '1');
+//error_reporting(E_ERROR | E_WARNING | E_PARSE);
+//ini_set('display_errors', '1');
 $from_proxy = !empty($_REQUEST['from_proxy']) ? $_REQUEST['from_proxy'] : '';
 if (isset($_REQUEST['login']) && !empty($_REQUEST['from_proxy'])) {
     $login = $_REQUEST['login'];

@@ -8,29 +8,36 @@ include_once('functions.php');
 include_once('privateFunctions.php'); //privateFunctions is a poorly named file that includes our APIkey, wskey, and URL for verification of patron hotspot eligibility
 //if we don't have a request type already, or we are reqyesting something that is not a hotspot (Google Form get data via apps script), include the login stuff
 if (empty($_REQUEST['req_type']) || $_REQUEST['req_type'] != 'hotspot') {
-	//authenticate
+    //authenticate
     include_once($_SERVER['DOCUMENT_ROOT'] . '/webFiles/login/top.php');
 } else {
     $_REQUEST['pid'] = !empty($_REQUEST['viewas']) ? $_REQUEST['viewas'] : '';
 ?>
-   <html><head>
-   <style>
-   body, p, div {
-    font-family: Arial, Helvetica, sans-serif;
-    font-family: 'Open Sans',sans-serif;
-    background-color: transparent;
-	}
-	</style>
-	</head>
-	<body>
+    <html>
+
+    <head>
+        <style>
+            body,
+            p,
+            div {
+                font-family: Arial, Helvetica, sans-serif;
+                font-family: 'Open Sans', sans-serif;
+                background-color: transparent;
+            }
+        </style>
+    </head>
+
+    <body>
     <?php
 }
+//variables that are pulled from the URL sent by the General Electronic Service are in the parameters file along with other non-secret params
+include_once('parameters.php');
 if (!empty($_REQUEST['state']) && !empty($states[$_REQUEST['state']])) {
     $_REQUEST['state'] = $states[$_REQUEST['state']];
 }
 $queryParams = '?' . urlencode('apikey') . '=' . urlencode($apikey);
 //user CURL to get record
-$service_url = 'https://api-eu.hosted.exlibrisgroup.com/almaws/v1/users/' . $_REQUEST['pid'];
+$service_url = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/' . $_REQUEST['pid'];
 $curl_response = getAlmaRecord($_REQUEST['pid'], $service_url, $queryParams);
 $patronRecord  = json_decode($curl_response);
 unset($curl_response);
@@ -70,12 +77,12 @@ if (!empty($_REQUEST['line1'])) {
             }
             unset($v);
         }
-    if ($addressExists == 'no') {
-		$k = !empty($k) ? $k+1 : 0;
-         //add it to the object
-        $addresses[$k] = $newAddress;
-         unset($k);
-    }
+        if ($addressExists == 'no') {
+            $k = !empty($k) ? $k + 1 : 0;
+            //add it to the object
+            $addresses[$k] = $newAddress;
+            unset($k);
+        }
     } else {
         //we didn't have an address for the patron. Better add one.
         $addresses[0] = $newAddress;
@@ -85,11 +92,11 @@ if (!empty($_REQUEST['line1'])) {
     // add it to the patronRecord object
     $patronRecord->contact_info->{"address"} = $addresses;
 }
-    $phNumbers                 = $patronRecord->contact_info->phone;
-    $newNumber['preferred']     = true;
-    $newNumber['preferred_sms'] = true;
-    $newNumber['segment_type']  = "Internal";
-    $newNumber['phone_number']  = !empty($_REQUEST['newPhone']) ? preg_replace('/[^0-9]/i', '', $_REQUEST['newPhone']) : null;
+$phNumbers                 = $patronRecord->contact_info->phone;
+$newNumber['preferred']     = true;
+$newNumber['preferred_sms'] = true;
+$newNumber['segment_type']  = "Internal";
+$newNumber['phone_number']  = !empty($_REQUEST['newPhone']) ? preg_replace('/[^0-9]/i', '', $_REQUEST['newPhone']) : null;
 if (!empty($_REQUEST['usePhone'])) {
     if (empty($newNumber['phone_number'])) {
         $usePhoneNo                = preg_replace('/[A-za-z ]/i', '', $_REQUEST['usePhone']);
@@ -105,7 +112,7 @@ if (!empty($_REQUEST['usePhone'])) {
     $newNumber = (object) $newNumber;
     if (!empty($phNumbers)) {
         foreach ($phNumbers as $k => $v) {
-			if ($v->phone_number == $newNumber->phone_number) {
+            if ($v->phone_number == $newNumber->phone_number) {
                 $phNumbers[$k]  = $newNumber;
                 $numberExists          = 'yes';
             } else {
@@ -114,22 +121,21 @@ if (!empty($_REQUEST['usePhone'])) {
                 }
             }
             unset($v);
-		}
-	}
-	if ($numberExists == 'no') {
-		$k = !empty($k) ? $k+1 : 0;
-		$phNumbers[$k]  = $newNumber;
-		unset($k);
-		}
-}
-else {
-	 if (!isset($phNumbers)) {
+        }
+    }
+    if ($numberExists == 'no') {
+        $k = !empty($k) ? $k + 1 : 0;
+        $phNumbers[$k]  = $newNumber;
+        unset($k);
+    }
+} else {
+    if (!isset($phNumbers)) {
         //we didn't have a phone for the patron. Better add one.
         $phNumbers[0] = $newNumber;
-		}
     }
-     $patronRecord->contact_info->{"phone"} = $phNumbers;
-     //let's just not mess with user roles. By not including them in what we send back, we don't accidentally overwrite something
+}
+$patronRecord->contact_info->{"phone"} = $phNumbers;
+//let's just not mess with user roles. By not including them in what we send back, we don't accidentally overwrite something
 unset($patronRecord->user_role);
 $patronRecord  = json_encode($patronRecord);
 //now update the record
