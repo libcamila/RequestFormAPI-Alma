@@ -46,11 +46,10 @@ unset($curl_response);
 if (!empty($_REQUEST['line1'])) {
     $newAddress['preferred']      = true;
     $newAddress['segment_type']   = "Internal";
-    $newAddress['line1']          = !empty($_REQUEST['line1']) ? $_REQUEST['line1'] : null;
-    $newAddress['line2']          = !empty($_REQUEST['line2']) ? $_REQUEST['line2'] : null;
-    $newAddress['line3']          = null;
-    $newAddress['line4']          = null;
-    $newAddress['line5']          = null;
+    for ($x = 1; $x <= 5; $x++) {
+        $lineName = "line{$x}";
+        $newAddress[$lineName]          = !empty($_REQUEST[$lineName]) ? $_REQUEST[$lineName] : null;
+    }
     $newAddress['city']           = !empty($_REQUEST['city']) ? $_REQUEST['city'] : null;
     $newAddress['state_province'] = !empty($_REQUEST['state']) ? $_REQUEST['state'] : null;
     $newAddress['postal_code']    = !empty($_REQUEST['zip']) ? $_REQUEST['zip'] : null;
@@ -147,7 +146,7 @@ if ((empty($jsonResult['errorsExist']) || $jsonResult['errorsExist'] != true) &&
     if (!empty($_REQUEST['line1'])) {
         print "<strong>Preferred address updated to:</strong><br>";
         print $newAddress->line1 . "<br>";
-        print !empty($newAddress->lline2) ? $newAddress->lline2 . "<br>" : '';
+        print !empty($newAddress->line2) ? $newAddress->line2 . "<br>" : '';
         print $newAddress->city . ", " . $newAddress->state_province . " " . $newAddress->postal_code . "<br>";
     }
     if (!empty($_REQUEST['usePhone'])) {

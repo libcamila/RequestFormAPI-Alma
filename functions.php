@@ -16,6 +16,40 @@ function getAlmaRecord($pid, $service_url, $queryParams)
     curl_close($curl);
     return $curl_response;
 }
+
+function getAlmaAvailability($url, $queryParams)
+{
+    $itemsParams = $queryParams . '&limit=100';
+    $curl        = curl_init();
+    curl_setopt($curl, CURLOPT_URL, $url . $itemsParams);
+    curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'GET');
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($curl, CURLOPT_FOLLOWLOCATION, TRUE);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+        'Accept: application/json',
+        'Content-Type: application/json'
+    ));
+    $curl_response = curl_exec($curl);
+    curl_close($curl);
+    $availarray = new stdClass();
+    $availarray->itemdata = json_decode($curl_response);
+    if (!empty($availarray->itemdata)) {
+        $available = 'no';
+        $isEquip = 'yes';
+        foreach ($availarray->itemdata->item as $item) {
+            if (!preg_match('/equip/i', $item->item_data->location->value)) {
+                $isEquip = 'no';
+            }
+            if ($item->item_data->base_status->value != 0) {
+                $available = 'yes';
+            }
+            unset($item);
+        }
+        $availarray->available = $available;
+        $availarray->equipment = $isEquip;
+    }
+    return $availarray;
+}
 function putPatronRecord($patronRecord, $service_url, $queryParams)
 {
     $curl = curl_init();
@@ -76,7 +110,7 @@ function bibLevelHold($pid, $mmsid, $makeRequest, $queryParams)
 //We have a call to housing's system to verify whether someone is a resident or not (residents are not eligible for hotspots)
 function getHotSpotList($vnumber, $eligibilityURL)
 {
-	print $eligibilityURL;
+    print $eligibilityURL;
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $eligibilityURL . $vnumber);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
@@ -90,72 +124,19 @@ function getHotSpotList($vnumber, $eligibilityURL)
     return $eligibility;
 }
 //function to either display a wah-wah message or send patron to correct form. 
-function redirectToForm($message,$url){
-//We redirect to Gravity forms within Wordpress. After they add addresses, phone numbers,
-// and other info, the form is submitted and pings either the update_address.php file then the place_hold.php file
-//or just the place_hold.php file.
-	if(!empty($message)){
-		include($GLOBALS['header']);
-          print $message; 
-          if(!empty($url)){
-			  print '<p><a href="'.$url.'">Continue to request form</a></p>';
-		  }
-		include($GLOBALS['footer']); 
-	}
-	else {
-		 header('location:'.$url);   
-	}	
+function redirectToForm($message, $url)
+{
+    //We redirect to Gravity forms within Wordpress. After they add addresses, phone numbers,
+    // and other info, the form is submitted and pings either the update_address.php file then the place_hold.php file
+    //or just the place_hold.php file.
+    if (!empty($message)) {
+        include($GLOBALS['header']);
+        print $message;
+        if (!empty($url)) {
+            print '<p><a href="' . $url . '">Continue to request form</a></p>';
+        }
+        include($GLOBALS['footer']);
+    } else {
+        header('location:' . $url);
+    }
 }
-$states      = array(
-    'Alabama' => 'AL',
-    'Alaska' => 'AK',
-    'Arizona' => 'AZ',
-    'Arkansas' => 'AR',
-    'California' => 'CA',
-    'Colorado' => 'CO',
-    'Connecticut' => 'CT',
-    'Delaware' => 'DE',
-    'Florida' => 'FL',
-    'Georgia' => 'GA',
-    'Hawaii' => 'HI',
-    'Idaho' => 'ID',
-    'Illinois' => 'IL',
-    'Indiana' => 'IN',
-    'Iowa' => 'IA',
-    'Kansas' => 'KS',
-    'Kentucky' => 'KY',
-    'Louisiana' => 'LA',
-    'Maine' => 'ME',
-    'Maryland' => 'MD',
-    'Massachusetts' => 'MA',
-    'Michigan' => 'MI',
-    'Minnesota' => 'MN',
-    'Mississippi' => 'MS',
-    'Missouri' => 'MO',
-    'Montana' => 'MT',
-    'Nebraska' => 'NE',
-    'Nevada' => 'NV',
-    'New Hampshire' => 'NH',
-    'New Jersey' => 'NJ',
-    'New Mexico' => 'NM',
-    'New York' => 'NY',
-    'North Carolina' => 'NC',
-    'North Dakota' => 'ND',
-    'Ohio' => 'OH',
-    'Oklahoma' => 'OK',
-    'Oregon' => 'OR',
-    'Pennsylvania' => 'PA',
-    'Rhode Island' => 'RI',
-    'South Carolina' => 'SC',
-    'South Dakota' => 'SD',
-    'Tennessee' => 'TN',
-    'Texas' => 'TX',
-    'Utah' => 'UT',
-    'Vermont' => 'VT',
-    'Virginia' => 'VA',
-    'Washington' => 'WA',
-    'West Virginia' => 'WV',
-    'Wisconsin' => 'WI',
-    'Wyoming' => 'WY'
-);
-?>

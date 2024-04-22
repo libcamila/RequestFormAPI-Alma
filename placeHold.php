@@ -12,11 +12,21 @@ if (!isset($_SESSION)) {
 //not a hotspot request, include the login info
 include_once('privateFunctions.php'); //privateFunctions is a poorly named file that includes variables for our APIkey, wskey, and URL for verification of patron hotspot eligibility
 include_once('functions.php');
-if (empty($_REQUEST['req_type']) || $_REQUEST['req_type'] != 'hotspot') {
+//variables that are pulled from the URL sent by the General Electronic Service are in the parameters file along with other non-secret params
+include_once('parameters.php');
+if (empty($req_type) || $req_type != 'hotspot') {
 	include_once($_SERVER['DOCUMENT_ROOT'] . '/webFiles/login/top.php');
 	if (isset($_REQUEST['viewas'])) {
 		include($_SERVER['DOCUMENT_ROOT'] . '/webFiles/login/viewas.php');
 	}
+	$doSend = 'yes';
+	$echoResponse = 'no';
+	//for CG Testing
+	if ($pid == 'V00016181') {
+		//$doSend = 'no';
+		//$echoResponse = 'yes';
+	}
+
 ?>
 	<html>
 
@@ -38,29 +48,26 @@ if (empty($_REQUEST['req_type']) || $_REQUEST['req_type'] != 'hotspot') {
 } else {
 	print "<html><body>";
 }
-//variables that are pulled from the URL sent by the General Electronic Service are in the parameters file along with other non-secret params
-include_once('parameters.php');
 if (!empty($pickupLibrary)) {
-	$pickupLocation = $_REQUEST['pickupLibrary'];
+	$pickupLocation = $pickupLibrary;
 	if (preg_match('/salem/i', $pickupLibrary)) {
 		$pickupLibrary = 'WOU_Salem';
 	} else {
 		$pickupLibrary = 'WOU';
 	}
 }
-
 //This is not a summit or hotspot request and includes a barcode (item-specific request). Go get the details (item id, holiding id, etc.) from the record so we can place the request correctly. 
 // We DO NOT WANTt item level holds on hotspots or tablets.//
-if (empty($_REQUEST['req_type']) || (!preg_match('/summit/i', $_REQUEST['req_type']) && !preg_match('/hotspot/i', $_REQUEST['req_type'])) && !empty($_REQUEST['barcode'])) {
+if (empty($req_type) || (!preg_match('/summit/i', $req_type) && !preg_match('/Interlibrary/i', $req_type) && !preg_match('/hotspot/i', $req_type)) && !empty($barcode)) {
 	$service_url   = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/items';
-	$curl_response = getAlmaRecord($_REQUEST['pid'], $service_url, $queryParams); //keep $_REQUEST['pid] - I think it is actually the piece, not patron, id in this instance
+	$curl_response = getAlmaRecord($pid, $service_url, $queryParams);
 	//print $curl_response;
 	$bib           = json_decode($curl_response, true);
 	//print_r($bib);
-	$mmsid = !empty($bib['bib_data']['mms_id']) ? $bib['bib_data']['mms_id'] : $mmsid;
-	$hid   = $bib['holding_data']['holding_id'];
-	$iid   = $bib['item_data']['pid'];
-	$itemDescription   = $bib['item_data']['description'];
+	$mmsid = !empty($bib['bib_data']['mms_id']) ? $bib['bib_data']['mms_id'] : (!empty($mmsid) ? $mmsid : (!empty($mms_id) ? $mms_id : null));
+	$hid   = !empty($bib['holding_data']['holding_id']) ? $bib['holding_data']['holding_id'] : null;
+	$iid   = !empty($bib['item_data']['pid']) ? $bib['item_data']['pid'] : null;
+	$itemDescription   = !empty($bib['item_data']['description']) ? $bib['item_data']['description'] : null;
 }
 $sendToAddress = '';
 $makeRequest = new stdClass();
@@ -72,40 +79,32 @@ $makeRequest->pickup_location_circulation_desk = null;
 $makeRequest->pickup_location_institution = null;
 $makeRequest->material_type->value = null;
 $makeRequest->comment = "Item to be picked up at {$pickupLocation}";
+$makeRequest->mms_id = !empty($mmsid) ? $mmsid : (!empty($mms_id) ? $mms_id : '');
 
 //make an array to update the address/phone. Still hacky, but whatever.
-if (!empty($_REQUEST['line1']) || !empty($_REQUEST['mailTo'])) {
+if (!empty($mailTo)) {
 	$makeRequest->pickup_location_type = 'USER_HOME_ADDRESS';
-	$addressNo                           = !empty($_REQUEST['mailTo']) ? str_replace('Use Address ', '', $_REQUEST['mailTo']) : 1;
+	$addressNo                           = !empty($mailTo) ? str_replace('Use Address ', '', $mailTo) : 1;
 	$addressNo                           = $addressNo - 1;
 	$makeRequest->comment             = 'Send to this address ';
-	$makeRequest->comment .= !empty($_REQUEST['mailTo']) ? '(Patron ' . str_replace('Use ', '', $_REQUEST['mailTo']) . '): ' : ': ';
-	if (!empty($_REQUEST['line1'])) {
-		$sendToAddress = $_REQUEST['line1'] . ' ';
-		$sendToAddress .= !empty($_REQUEST['line2']) ? $_REQUEST['line2'] . ' ' : '';
-		$sendToAddress .= $_REQUEST['city'] . ', ';
-		$sendToAddress .= $_REQUEST['state'] . ' ';
-		$sendToAddress .= $_REQUEST['zip'] . ' ';
-	} elseif (!empty($_REQUEST['mailTo'])) {
-		$sendToAddress = $_SESSION['woulib']['addresses'][$addressNo]['line'][0] . ' ';
-		$sendToAddress .= !empty($_SESSION['woulib']['addresses'][$addressNo]['line'][1]) ? $_SESSION['woulib']['addresses'][$addressNo]['line'][1] . ' ' : '';
-		$sendToAddress .= $_SESSION['woulib']['addresses'][$addressNo]['city'];
-		$sendToAddress .= ', ' . $_SESSION['woulib']['addresses'][$addressNo]['state'];
-		$sendToAddress .= ' ' . $_SESSION['woulib']['addresses'][$addressNo]['zip'];
+	$makeRequest->comment .= !empty($mailTo) ? '(Patron ' . str_replace('Use ', '', $mailTo) . '): ' : ': ';
+	if (!empty($mailTo)) {
+		$sendToAddress = $line1 . ' ' . (!empty($line2) ? $line2 . ' ' : '') . ' ' . $city . ', ' . $state . ' ' . $zip . ' ';
+	} elseif (!empty($mailTo)) {
+		$sendToAddress = $_SESSION['woulib']['addresses'][$addressNo]['line'][0] . ' ' . (!empty($_SESSION['woulib']['addresses'][$addressNo]['line'][1]) ? $_SESSION['woulib']['addresses'][$addressNo]['line'][1] . ' ' : '') . $_SESSION['woulib']['addresses'][$addressNo]['city'] . ', ' . $_SESSION['woulib']['addresses'][$addressNo]['state'] . ' ' . $_SESSION['woulib']['addresses'][$addressNo]['zip'];
 	}
 	$makeRequest->comment .= $sendToAddress;
 }
-$makeRequest->mms_id = $mmsid;
 
 //reset $queryParams to default
 $queryParams = '?' . urlencode('apikey') . '=' . urlencode($apikey);
 //non-summit requests, create a hold
-if (empty($_REQUEST['req_type']) || (!preg_match('/summit/i', $_REQUEST['req_type']) && !preg_match('/Interlibrary/i', $_REQUEST['req_type']) && $_REQUEST['req_type'] != 'ill')) {
+if (empty($req_type) || (!preg_match('/summit/i', $req_type) && !preg_match('/Interlibrary/i', $req_type) && $req_type != 'ill')) {
 	//print '<p>Hold request</p>';
 	//we have a holding Id and it isn't a hotspot, the URL should go to the item level
-	if ((empty($_REQUEST['req_type']) || $_REQUEST['req_type'] != 'hotspot' || $mmsid == '99900391873201856') && !empty($hid) && !empty($itemDescription)) {
+	if ((empty($req_type) || $req_type != 'hotspot' || $mmsid == '99900391873201856') && !empty($hid) && !empty($itemDescription)) {
 		//print "ITEM";
-		$queryParams .= '&' . urlencode('user_id') . '=' . urlencode($_REQUEST['pid']);
+		$queryParams .= '&' . urlencode('user_id') . '=' . urlencode($pid);
 		$service_url = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/bibs/' . $mmsid . '/holdings/' . $hid . '/items/' . $iid;
 	} else {
 		//print "BIB";
@@ -116,12 +115,14 @@ if (empty($_REQUEST['req_type']) || (!preg_match('/summit/i', $_REQUEST['req_typ
 	$service_url .= '/requests';
 	$makeRequest   = json_encode($makeRequest, JSON_PRETTY_PRINT);
 	//user CURL to place hold
-	$curl_response = postAlmaHold($makeRequest, $service_url, $queryParams);
+	if ($doSend == 'yes') {
+		$curl_response = postAlmaHold($makeRequest, $service_url, $queryParams);
+	}
 }
 //summit request, create a resource sharing request
-elseif (!empty($_REQUEST['req_type']) && (preg_match('/summit/i', $_REQUEST['req_type']) || preg_match('/Interlibrary/i', $_REQUEST['req_type']) || $_REQUEST['req_type'] == 'ill')) {
+elseif (!empty($req_type) && (preg_match('/summit/i', $req_type) || preg_match('/Interlibrary/i', $req_type) || $req_type == 'ill')) {
 	print '<p>Resouce Sharing Request</p>';
-	if ($req_type != 'hold' && $req_type != 'digitize' && (empty($author) || empty($oclc_num) || empty($isbn) || empty($title))) {
+	if (strtolower($req_type) != 'hold' && $req_type != 'digitize' && (empty($author) || empty($oclc_num) || empty($isbn) || empty($title))) {
 		//if we are missing citation information, go get it from OCLC. We really should have an OCLC number for this to work correctly.
 		include('oclc.php');
 		if (empty($oclc_num)) {
@@ -131,16 +132,24 @@ elseif (!empty($_REQUEST['req_type']) && (preg_match('/summit/i', $_REQUEST['req
 
 	//create the container for our request
 	$thisRequest = new ResourceSharingRequestObject();
-	$thisRequest->set_format((!empty($reqFormat) && $reqFormat == 'copy') ? 'Digital' : 'Physical');
+	$thisRequest->set_format(((!empty($reqFormat) && $reqFormat == 'copy') || (!empty($issn) && !empty($atitle))) ? 'Digital' : 'Physical');
 	$thisRequest->set_citation_type($thisRequest->format->desc);
 	$thisRequest->set_param('title', $title);
-	$thisRequest->set_param('chapter_title', !empty($_REQUEST['atitle']) ? trim($_REQUEST['atitle']) : null);
+	if (!empty($issn) || $reqFormat == 'copy') {
+		$thisRequest->set_param('title', $atitle);
+		$thisRequest->set_param('journal_title', !empty($title) ? trim($title) : null);
+	}
+	$thisRequest->set_param('chapter_title', !empty($atitle) ? trim($atitle) : null);
 	$thisRequest->set_param('oclc_number', $oclc_num);
 	$thisRequest->set_param('volume', $itemDescription);
 	$thisRequest->set_param('issue', $issue);
 	$thisRequest->set_param('isbn', $isbn);
 	$thisRequest->set_param('issn', $issn);
 	$thisRequest->set_param('pmid', $pmid);
+	if (!empty($edition)) {
+		$thisRequest->set_param('edition', $edition);
+		$thisRequest->set_param('specific_edition', $specific_edition);
+	}
 	$thisRequest->set_param('doi', $doi);
 	$thisRequest->set_param('author', $author);
 	$thisRequest->set_param('source', $sid);
@@ -149,150 +158,109 @@ elseif (!empty($_REQUEST['req_type']) && (preg_match('/summit/i', $_REQUEST['req
 	$thisRequest->set_value('level_of_service', (!empty($_REQUEST['lolr']) && $_REQUEST['lolr'] == 'Yes') ? 'WHEN_CONVINIENT' : null);
 	$thisRequest->set_pickup_location($pickupLibrary);
 	$thisRequest->set_preferred_send_method((!empty($reqFormat) && $reqFormat == 'copy') ? 'EMAIL' : 'MAIL');
-	$thisRequest->last_interest_date = date('Y-m-d', strtotime('18 days')) . 'Z'; // or form value
-	if (preg_match('/Interlibrary/i', $_REQUEST['req_type']) || $_REQUEST['req_type'] == 'ill' || $reqFormat == 'copy') {
+	$thisRequest->last_interest_date = $needby;
+	if (preg_match('/Interlibrary/i', $req_type) || $req_type == 'ill' || $reqFormat == 'copy') {
 		$thisRequest->set_value('partner', 'OCLC');
 	}
-	if (!empty($_REQUEST['line1']) || !empty($_REQUEST['mailTo'])) {
-		$addressNo       = !empty($_REQUEST['mailTo']) ? str_replace('Use Address ', '', $_REQUEST['mailTo']) : 1;
+	if (!empty($mmsid)) {
+		$thisRequest->set_param('mms_id', $mmsid);
+	}
+	if (!empty($line1) || !empty($mailTo)) {
+		$addressNo       = !empty($mailTo) ? str_replace('Use Address ', '', $mailTo) : 1;
 		$addressNo       = $addressNo - 1;
 		$thisRequest->note = 'Upon receipt, send to: ';
-		$thisRequest->note .= !empty($_REQUEST['mailTo']) ? '(Patron ' . str_replace('Use ', '', $_REQUEST['mailTo']) . '): ' : ': ';
-		if (!empty($_REQUEST['line1'])) {
-			$sendToAddress = $_REQUEST['line1'] . ' ';
-			$sendToAddress .= !empty($_REQUEST['line2']) ? $_REQUEST['line2'] . ' ' : '';
-			$sendToAddress .= $_REQUEST['city'] . ', ';
-			$sendToAddress .= $_REQUEST['state'] . ' ';
-			$sendToAddress .= $_REQUEST['zip'] . ' ';
-		} elseif (!empty($_REQUEST['mailTo'])) {
-			$sendToAddress = $_SESSION['woulib']['addresses'][$addressNo]['line'][0] . ' ';
-			$sendToAddress .= !empty($_SESSION['woulib']['addresses'][$addressNo]['line'][1]) ? $_SESSION['woulib']['addresses'][$addressNo]['line'][1] . ' ' : '';
-			$sendToAddress .= $_SESSION['woulib']['addresses'][$addressNo]['city'];
-			$sendToAddress .= ', ' . $_SESSION['woulib']['addresses'][$addressNo]['state'];
-			$sendToAddress .= ' ' . $_SESSION['woulib']['addresses'][$addressNo]['zip'];
+		$thisRequest->note .= !empty($mailTo) ? '(Patron ' . str_replace('Use ', '', $mailTo) . '): ' : ': ';
+		if (!empty($line1)) {
+			$sendToAddress = $line1 . ' ' . (!empty($line2) ? $line2 . ' ' : '') . $city . ', ' . $state . ' ' . $zip . ' ';
+		} elseif (!empty($mailTo)) {
+			$sendToAddress = $_SESSION['woulib']['addresses'][$addressNo]['line'][0] . ' ' . (!empty($_SESSION['woulib']['addresses'][$addressNo]['line'][1]) ? $_SESSION['woulib']['addresses'][$addressNo]['line'][1] . ' ' : '') . $_SESSION['woulib']['addresses'][$addressNo]['city'] . ', ' . $_SESSION['woulib']['addresses'][$addressNo]['state'] . ' ' . $_SESSION['woulib']['addresses'][$addressNo]['zip'];
 		}
 		$thisRequest->note .= $sendToAddress;
 	}
 	$thisRequest->note .= " Request submitted via API.";
+
 	if (empty($thisRequest->level_of_service->value)) {
 		unset($thisRequest->level_of_service);
 	}
 	$request = json_encode($thisRequest, JSON_PRETTY_PRINT);
 	$queryParams .= '&' . urlencode('override_blocks') . '=' . urlencode('true') . '&format=json&user_id_type=all_unique';
-	// if ($pid != 'V00016181') {
-	$service_url   = "https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/$pid/resource-sharing-requests";
-	$curl_response = postAlmaHold($request, $service_url, $queryParams);
-	/* } else {
-        print '<p>REQUEST NOT PLACED FOR TESTING!!!</p>';
-        $curl_response = $request;
-        print "<p>NEW REQUEST</p><pre>{$request}</pre>";
-    }*/
+
+	if ($doSend == 'yes') {
+		$service_url   = "https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/$pid/resource-sharing-requests";
+		$curl_response = postAlmaHold($request, $service_url, $queryParams);
+	}
 }
 $result = json_decode($curl_response, true);
+if ($doSend == 'no') {
+	print '<p>REQUEST NOT PLACED FOR TESTING!!!</p>';
+	$curl_response = $request;
+}
+if ($echoResponse == 'yes') {
+
+	print "<p>REQUEST/RESPONSE</p><pre>";
+	print_r($result);
+	print "</pre>";
+}
 if (isset($result['title']) && trim($result['title']) == 'Tablet:') {
 	$result['title'] = 'Tablet: iPad';
 }
 //depending on what we're doing here, or success message varies
 $successMessage = "<p><strong>Request placed for:</strong> <em>" . $result['title'] . "</em></p>";
-if (preg_match('/summit/i', $_REQUEST['req_type'])) {
+if (preg_match('/summit/i', $req_type)) {
 	$successMessage .= 'You will receive an email and/or text notification when your item arrives. ';
 }
-if (!empty($_REQUEST['line1']) || !empty($_REQUEST['mailTo'])) {
+if (!empty($line1) || !empty($mailTo)) {
 	$successMessage .= "<p>We will send it to you at: " . $sendToAddress . "</p><p>Our onsite staff will check out the materials to your library account and put them in the mail to you within the next few business days.</p>";
 } else {
 	$successMessage .= '<p>It will be available for pickup at ' . $pickupLibraries[$pickupLibrary] . '</p><p></p>';
-	if (!preg_match('/summit/i', $_REQUEST['req_type']) && $pickupLibrary == 'WOU') {
-		// $successMessage .= 'We pull materials at 9 a.m. and 1 p.m. daily, so you can come by after the next scheduled pull time.';
-	}
 }
-if (empty($_REQUEST['usePhone']) && !empty($_REQUEST['smsNumber'])) {
-	$successMessage .= '<p>You will receive messages about this and other requests at the number:<strong>' . $_REQUEST['smsNumber'] . '</strong></p>';
+if (empty($usePhone) && !empty($smsNumber)) {
+	$successMessage .= '<p>You will receive messages about this and other requests at the number:<strong>' . $smsNumber . '</strong></p>';
 }
 $requestPlaced = false;
-//if the hold placed successfully
-if (!empty($result) && (empty($result['errorsExist']) || $result['errorsExist'] != true) && empty($result['web_service_result']['errorsExist'])) {
+if ($result['errorsExist'] == true || (isset($result['web_service_result']['errorsExist']) && $result['web_service_result']['errorsExist'] == true)) {
+	if ((!empty($barcode) || !empty($itemDescription))) {
+		//try a bib level hold for local holds
+		$secondResult = bibLevelHold($pid, $mmsid, $makeRequest, $queryParams);
+		if ($secondResult['errorsExist'] != true && (!isset($jsonResult['web_service_result']['errorsExist']) || $secondResult['web_service_result']['errorsExist'] == false)) {
+			print $successMessage;
+			$requestPlaced = true;
+		}
+	}
+	if ((isset($secondResult) && ($secondResult['errorsExist'] == true)) || (!isset($secondResult) && ($result['errorsExist'] == true || $result['web_service_result']['errorsExist'] == true))) {
+		$errors = (isset($secondResult) && isset($secondResult['errorsExist'])) ? $secondResult['errorList']['error'] : (isset($result['web_service_result']['errorsExist']) ? $result['web_service_result']['errorList']['error'] : $result['errorList']['error']);
+		$requestToSend = isset($makeRequest) ? $makeRequest : $thisRequest;
+		$typeOfForm = !empty($req_type) ? $req_type : 'Hold';
+		$errorMessage =  '<strong>There was an error placing a request for this item:</strong><ul>';
+		$errorsTypes = '';
+		$errorsList = '';
+		//wah-wah. We weren't able to place a hold
+		//add all the errors
+		foreach ($errors as $k => $v) {
+			$errorsList .= "<li>{$v['errorMessage']}</li>";
+			$errorsTypes .= "{$v['errorMessage']}; ";
+			unset($k, $v);
+		}
+		//display the response and request that was sent
+		if (isset($_REQUEST['debug'])) {
+			print_r($errors);
+			print  '<br>';
+			print $requestToSend . '<br>';
+		}
+		$errorMessage .= $errorsList;
+		$errorMessage .= "</uL><p>Please contact the library for assistance.</p><script>var xhr = new XMLHttpRequest();xhr.open('GET', 'https://script.google.com/a/macros/mail.wou.edu/s/AKfycbw27T6S6F_5vDdyD40WyLq4x-nFgZjsgtsQGKQ8QjvQQN4tqQ6gG9P3X6NW-tAYdPCK/exec?type={$typeOfForm}&title=" . addslashes($title) . "&vnumber={$pid}&error={$errorsTypes}');xhr.onload = function() {if (xhr.status === 200) {console.log(xhr.responseText);}else {console.log('Request failed.  Returned status of ' + xhr.status);}};xhr.send();</script>";
+		$errorMessage .= implode(',', $errors);
+		print $errorMessage;
+	}
+}
+//if the request placed successfully
+else if ((!isset($result['errorsExist']) || $result['errorsExist'] != true) && !isset($result['web_service_result']['errorsExist'])) {
 	//Wahoo!
 	print $successMessage;
 	$requestPlaced = true;
-} else {
-	print_r($result);
-	//wah-wah. We weren't able to place a hold
-	//we also don't have  barcode or description. We're done.
-	if (empty($_REQUEST['barcode']) || empty($itemDescription)) {
-		print '<strong>There was an error placing a hold on this item:</strong><br>';
-		//print $curl_response;
-		//print all the errors
-		if (isset($result['errorList'])) {
-			foreach ($result['errorList']['error'] as $k => $v) {
-				print $v['errorMessage'] . '<br>';
-				unset($k, $v);
-			}
-			//display the response and request that was sent
-			if (isset($_REQUEST['debug'])) {
-				print $curl_response . '<br>';
-				print $makeRequest . '<br>';
-			}
-		}
-	}
-	//we do have a description or barcode, let's try another route to get the hold placed
-	else {
-		//I don't actually remember why I am placing the item hold in a loop here. It seems like a bad idea. But, it works and I'm not feeling the urge to break it right now.
-		//I'm guessing maybe this was an early attempt on my part to place multiple holds at the same time.
-		//also, for some inexplicable (to me) reason, sometimes the JSON returned by the API has the error within the web_service_result and sometimes not, so we have to account for both when trying to place the hold
-		//no web_service_result
-		if (isset($result['errorList']['error'])) {
-			foreach ($result['errorList']['error'] as $k => $v) {
-				//place a second request, this time at the bib level
-				$secondResult = bibLevelHold($pid, $mmsid, $makeRequest, $queryParams);
-				if (!empty($secondResult) && (empty($secondResult['errorsExist']) || $secondResult['errorsExist'] != true) && empty($jsonResult['web_service_result']['errorsExist']) && empty($secondResult['web_service_result']['errorsExist'])) {
-					//it worked!
-					print $successMessage;
-				} else {
-					//no dice
-					print '<strong>There was an error placing a hold on this:</strong><br>';
-					/*foreach ($secondResult['errorList']['error'] as $k2 => $v2) {
-						print $v2['errorMessage'] . '<br>';
-						unset($k2, $v2);
-					}*/
-					print_r($secondResult['errorList']);
-					if (isset($_REQUEST['debug'])) {
-						print $curl_response . '<br>';
-						print $makeRequest . '<br>';
-						print $secondResult . '<br>';
-					}
-				}
-			}
-		}
-		//web_service_result
-		elseif (!empty($result['web_service_result']['errorList']['error'])) {
-			foreach ($result['web_service_result']['errorList']['error'] as $k => $v) {
-				$secondResult = bibLevelHold($pid, $mmsid, $makeRequest, $queryParams);
-				if (!empty($secondResult) && (empty($secondResult['errorsExist']) || $secondResult['errorsExist'] != true) && empty($jsonResult['web_service_result']['errorsExist']) && empty($secondResult['web_service_result']['errorsExist'])) {
-					//let the code angels sing
-					print $successMessage;
-				} else {
-					//bummer, dude
-					print '<strong>There was an error placing this hold:</strong><br>';
-					/*foreach ($secondResult['errorList']['error'] as $k2 => $v2) {
-						print $v2['errorMessage'] . '<br>';
-						unset($k2, $v2);
-					}*/
-					print_r($secondResult['errorList']);
-					if (isset($_REQUEST['debug'])) {
-						print $curl_response . '<br>';
-						print $makeRequest . '<br>';
-						print $secondResult . '<br>';
-					}
-				}
-			}
-		} else {
-			print $curl_response;
-		}
-		print '<br>';
-	}
 }
 //if we haven't alredy included this, make sure our page has the styles, etc.
-if (empty($_REQUEST['req_type']) || $_REQUEST['req_type'] != 'hotspot') {
+if (empty($req_type) || $req_type != 'hotspot') {
 	?>
 		<style>
 			/*Chat CSS*/

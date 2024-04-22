@@ -1,9 +1,9 @@
 <?php
-/*
+
 ini_set('display_errors', 1);
 error_reporting(E_ERROR | E_WARNING | E_PARSE);
 ini_set('display_errors', '1');
-*/
+
 //the initial authentication and pull of data
 if (empty(session_id()) && !isset($_SESSION)  && session_status() == PHP_SESSION_NONE) {
 	session_start();
@@ -30,10 +30,12 @@ if (isset($expires) && $expires > $now) {
 	}
 	if (empty($formType)) {
 		unset($_REQUEST['mailform']);
+		$req_type = (!empty($_REQUEST['req_type']) && empty($_REQUEST['barcode'])) ? $_REQUEST['req_type'] : 'hold';
 		$message = '<style>body {padding:1em;}</style><form action="' . $_SERVER["SELF"] . '" style="padding:1em;">';
 		$message .= $top_html;
 		$message .= '<p><strong>I am requesting:</strong></p>';
-		$message .= '<p></p><input type="radio" name="formType" value="mailform"> This be mailed to me or held at the library for pick up<br>';
+		$message .= '<p></p><input type="radio" name="formType" value="mailform"> This be mailed to me or held at the library for pick up';
+		$message .= '<br>';
 		$message .= '<input type="radio" name="formType" value="scananddeliv"> A portion of this be digitized and sent directly to me</p>';
 		if (!preg_match('/student/i', $status)) {
 			$message .= '<p><strong>Faculty/Staff Only:</strong></p>';
@@ -41,8 +43,19 @@ if (isset($expires) && $expires > $now) {
 			$message .= '<input type="radio" name="formType" value="reserves"> This be made available to my students through the library\'s print reserves system or be booked for a specific date for use in sthe classroom (physical items only)<br>';
 			$message .= '<input type="radio" name="formType" value="videoDigitization"> This be digitized and made embeddable in my Canvas or Moodle shell (videos only)</p>';
 		}
+		$message  .= "<input name=\"req_type\" type=\"hidden\" value=\"{$req_type}\">";
+		//only need this for requests that are holds (mailform && barcode)
+		/*$result = json_decode(getAlmaRecord($pid, 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/items', $queryParams));
+		$url = $result->holding_data->link . '/items';
+		if ($req_type == 'hold' && !empty($_REQUEST['barcode'])) {
+			$availArray = getAlmaAvailability($url, $queryParams);
+			if ($availArray->available == 'no' && $availArray->equipment == 'no') {
+				$req_type = 'summit';
+			}
+		}*/
 		foreach ($_REQUEST as $k => $v) {
-			$message .=  "<input type=\"hidden\" name=\"{$k}\" value=\"{$v}\">";
+			if ($k != 'req_type')
+				$message .=  "<input type=\"hidden\" name=\"{$k}\" value=\"{$v}\">";
 			unset($k, $v);
 		}
 		$message .= '<br><input type="submit" value="Submit"></form>';
@@ -59,15 +72,23 @@ if (isset($expires) && $expires > $now) {
 			$$formType = 'yes';
 		}
 		if (!empty($_SESSION['libSession']['addresses'])) {
+			//this is a whole lot of parsing for data I already have??
 			foreach ($_SESSION['libSession']['addresses'] as $k => $v) {
 				$lines = '';
-				foreach ($v['line'] as $k2 => $v2) {
-					if (!empty($v2)) {
-						$x                    = $k2 + 1;
-						$label                = 'line' . $x;
-						$this_address[$label] = $v2;
+				if (isset($v['line'])) {
+					foreach ($v['line'] as $k2 => $v2) {
+						if (!empty($v2)) {
+							$x                    = $k2 + 1;
+							$label                = 'line' . $x;
+							$this_address[$label] = $v2;
+						}
+						unset($k2, $v2);
 					}
-					unset($k2, $v2);
+				} else {
+					for ($x = 1; $x <= 5; $x++) {
+						$lineName = "line{$x}";
+						$this_address["line{$x}"]    = !empty($v["line{$x}"]) ? $v["line{$x}"] : null;
+					}
 				}
 				$this_address['city']  = $v['city'];
 				$this_address['state'] = $v['state'];
@@ -102,13 +123,20 @@ if (isset($expires) && $expires > $now) {
 			}
 			$message .= 'Your status is: ' . $_SESSION['libSession']['status'];
 			redirectToForm($message, null);
-		} elseif (($genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes' && empty($_REQUEST['mailform']) && empty($_mailform)) || $videoDigitization == 'yes') {
+		} elseif ((($genre == 'av' && !empty($scananddeliv) && $scananddeliv == 'yes' && empty($_REQUEST['mailform']) && empty($_mailform)) || $videoDigitization == 'yes') && empty($cdl) && empty($reserves)) {
 			$url = $digitizationURL . "title={$title}&date={$date}&isbn={$isbn}&oclcnum={$oclcnum}&authors={$authors}&callNumber={$callNumber}&description={$description}&WOUOwns=Yes&format=Video";
 			redirectToForm(null, $url);
-		} elseif (!empty($scananddeliv) && $scananddeliv == 'yes' && empty($_REQUEST['mailform']) && empty($mailform)) {
+		} elseif (!empty($scananddeliv) && $scananddeliv == 'yes' && empty($_REQUEST['mailform']) && empty($mailform) && empty($cdl) && empty($reserves)) {
 			$message = '';
 			$url     = $digitizationURL . "title=$title&date=$date&isbn=$isbn&oclcnum=$oclcnum&authors=$authors&callNumber=$callNumber&description=$description&atitle=$atitle&issn=$issn&issue=$issue&volume=$volume&ericdoc=$ed&WOUOwns=Yes&sid=$sid&format=Print";
 			redirectToForm($message, $url);
+		}
+		//cdl
+		elseif (!empty($cdl) || !empty($reserves)) {
+			$detailsStr = "Title:%20{$title}%0ADate:%20{$date}%0AISBN:%20{$isbn}%0AVolume:%20{$volume}%0AMMSID:%20{$mmsid}%0AType:%20{$genre}%0AcallNumber:%20{$callNumber}%0Adescription:%20{$description}%0Alocation:%20{$location}";
+			$url = $reserveFormURL . "details={$detailsStr}&WOUOwns=yes";
+			$url .= !empty($cdl) ? "&reserveType=CDL" : "&reserveType=reserves";
+			redirectToForm(null, $url);
 		}
 		//delivery form
 		elseif (!empty($_REQUEST['mailform']) || !empty($mailform)) {
@@ -122,10 +150,11 @@ if (isset($expires) && $expires > $now) {
 				}
 			}
 			if ($eligibility != 'NOT ELIGIBLE') {
-				$url = $holdURL . "title={$title}&date={$date}&isbn={$isbn}&authors={$authors}&callnumber={$callNumber}&description={$description}&barcode={$barcode}&mmsid={$mms_id}&requestType={$requestType}&oclcnum={$oclcnum}&sid={$sid}";
-				if (!empty($format) || (preg_match('/interlibrary/i', $_REQUEST['req_type']) || preg_match('/ill/i', $_REQUEST['req_type']))) {
-					$url .= "&atitle={$atitle}&doi={$doi}&pmid={$pmid}&issn={$issn}&format={$format}&sid={$sid}&pages={$pages}&volume={$volume}&issue={$issue}";
-				}
+				$url = $holdURL . "title={$title}&date={$date}&isbn={$isbn}&authors={$authors}&callnumber={$callNumber}&description={$description}&barcode={$barcode}&mmsid={$mmsid}&requestType={$req_type}&oclcnum={$oclcnum}&sid={$sid}";
+				$atitle = trim(preg_replace('/\n|\r/i', '', $atitle));
+				//if (!empty($format) || (preg_match('/interlibrary/i', $_REQUEST['req_type']) || preg_match('/ill/i', $_REQUEST['req_type']))) {
+				$url .= "&atitle={$atitle}&doi={$doi}&pmid={$pmid}&issn={$issn}&format={$format}&sid={$sid}&pages={$pages}&volume={$volume}&issue={$issue}";
+				//}
 				$x = 1;
 				$phoneNums = array();
 				foreach ($phoneNo as $k => $v) {
@@ -136,7 +165,7 @@ if (isset($expires) && $expires > $now) {
 						if (!empty($v['sms']) && !isset($smsPhone)) {
 							$smsPhone = $x;
 							//$url .= '* This is currently selected as your SMS number';
-							$url .= '&smsPhone=phone' . $x . '&wantSMS=No';
+							$url .= '&smsPhone=phone' . $x . '&wantSMS=No&useSMS=1';
 							$url .= '&sms=' . $v['sms'];
 							$url .= '&smsNumber=' . $v['number'];
 						}
@@ -160,19 +189,16 @@ if (isset($expires) && $expires > $now) {
 					$url .= preg_match('/summit/i', $requestType) ? 'summit' : ((preg_match('/interlibrary/i', $requestType) || preg_match('/ill/i', $requestType)) ? 'ill' : $requestType);
 				}
 				redirectToForm(null, $url);
+				print "<script>window.location.href = '{$url}';</script>";
 			} else {
 				//print $eligibility;
 				$message = '<p>&nbsp;</p><p>iPad requesting is limited to students enrolled in specific courses. You do not appear to be enrolled in one of those courses.</p><p>If you believe this is incorrect, please <a href="https://library.wou.edu">contact the library</a> (libweb@wou.edu)</p>';
 				redirectToForm($message, null);
 			}
-		} elseif (!empty($cdl) || !empty($reserves)) {
-			$detailsStr = "Title:%20{$title}%0ADate:%20{$date}%0AISBN:%20{$isbn}%0AVolume:%20{$volume}%0AMMSID:%20{$mmsid}%0AType:%20{$genre}%0AcallNumber:%20{$callNumber}%0Adescription:%20{$description}%0Alocation:%20{$location}";
-			$url = $reserveFormURL . "details={$detailsStr}&WOUOwns=yes";
-			$url .= !empty($cdl) ? "&reserveType=CDL" : "&reserveType=reserves";
-			redirectToForm(null, $url);
 		} else {
 			$url = $requestFormURL . "&title={$title}&date={$date}&isbn={$isbn}&authors={$authors}";
 			redirectToForm(null, $url);
+			print "<script>window.location.href = '{$url}';</script>";
 		}
 	}
 } //end of not expired

@@ -1,8 +1,8 @@
 <?php
 //this page's sole purpose is completing citation data by geting the record from OCLC.
 if (!empty($oclcnum) || !empty($_REQUEST['oclcnum'])) {
-        $oclcnum = !empty($oclcnum) ? $oclcnum : $_REQUEST['oclcnum'];
-		$isn = $oclcnum;
+    $oclcnum = !empty($oclcnum) ? $oclcnum : $_REQUEST['oclcnum'];
+    $isn = $oclcnum;
 } elseif (!empty($isbn) || !empty($_REQUEST['isbn'])) {
     if (empty($isbn)) {
         $isbn = $_REQUEST['isbn'];
@@ -14,6 +14,7 @@ if (!empty($oclcnum) || !empty($_REQUEST['oclcnum'])) {
     }
     $isn = 'issn/' . $issn;
 }
+include_once($_SERVER['DOCUMENT_ROOT'] . '/webFiles/Alma_Primo/APIRequestFormAlma/privateFunctions.php'); //privateFunctions is a poorly named file that includes variables for our APIkey, wskey, and URL for verification of patron hotspot eligibility
 $oclc_url   = "https://www.worldcat.org/webservices/catalog/content/$isn?wskey=$wskey"; //wskey is unique to the institution
 //&format=json';
 //I hate XML with a firey passion. Please give me JSON.
@@ -36,7 +37,7 @@ if ((empty($issn) && empty($isbn) || empty($title) || empty($date)) && isset($oc
             }
         }
         if ($q['@attributes']['tag'] == '020' && empty($isbn)) {
-			//just get the first one, if it is an array of isbns
+            //just get the first one, if it is an array of isbns
             $isbn = is_array($q['subfield']) ? $q['subfield'][0] : $q['subfield'];
         }
         if ($q['@attributes']['tag'] == '245' && empty($title)) { //only update the title if we don't have it or summit will break
@@ -63,4 +64,3 @@ if ((empty($issn) && empty($isbn) || empty($title) || empty($date)) && isset($oc
         }
     }
 }
-?>

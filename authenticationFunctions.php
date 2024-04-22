@@ -2,9 +2,9 @@
 //main authentication function
 function authenticatePerson($login, $from_proxy, $token)
 {
-	//print $login;
-	//print "$from_proxy.";
-    global $OCLCwskey, $apikey, $emailDomain, $searchId, $searchPassword, $ldap_server, $basedn;
+    //print $login;
+    //print "$from_proxy.";
+    global $OCLCwskey, $apikey, $emailDomain, $searchId, $WOUsearchId, $searchPassword, $ldap_server, $basedn;
     if (empty($token) && (empty($from_proxy) || $from_proxy != 'yes')) {
         $ds = ldap_connect($ldap_server);
         if ($ds) {
@@ -48,8 +48,7 @@ function authenticatePerson($login, $from_proxy, $token)
                         $uid = $IDnumber;
                         if (!is_array($info[0]['usertype']) || !isset($info[0]['usertype'])) {
                             $wou_status = isset($info[0]['usertype']) ? $info[0]['usertype'] : '';
-                        }
-                        else {
+                        } else {
                             if (in_array('Faculty', $info[0]['usertype'])) {
                                 $wou_status = 'Faculty';
                             } elseif (in_array('Staff', $info[0]['usertype'])) {
@@ -64,12 +63,10 @@ function authenticatePerson($login, $from_proxy, $token)
                             if (is_numeric($k)) {
                                 if (($wou_status == 'Faculty' || $wou_status == 'Staff') && !preg_match('/[0-9]/i', $v)) {
                                     $emails[$k]['preferred'] = true;
-                                }
-                                elseif ($wou_status == 'Faculty' || $wou_status == 'Staff') {
+                                } elseif ($wou_status == 'Faculty' || $wou_status == 'Staff') {
                                     $emails[$k]['preferred'] = true;
-                                }
-                                else {
-									$emails[$k]['preferred'] = true;
+                                } else {
+                                    $emails[$k]['preferred'] = true;
                                 }
                                 $emails[$k]['email_address'] = $v;
                             }
@@ -84,16 +81,15 @@ function authenticatePerson($login, $from_proxy, $token)
             //the $r bind didn't work at this point, but we are still in the zone where the $ds connection did work
             ldap_close($ds);
         } //end of if-ds worked
-		if(!empty($forename)){
-			$_SESSION['libSession']['firstname'] = $forename;
-			$_SESSION['libSession']['lastname'] = $surname;
-			$_SESSION['libSession']['IDnumber'] = $uid;
-			$_SESSION['libSession']['ptype'] = $wou_status;
-			$_SESSION['libSession']['vnumber'] = $uid;
-		}
-	}
-    else {
-		//print 'PROXY';
+        if (!empty($forename)) {
+            $_SESSION['libSession']['firstname'] = $forename;
+            $_SESSION['libSession']['lastname'] = $surname;
+            $_SESSION['libSession']['IDnumber'] = $uid;
+            $_SESSION['libSession']['ptype'] = $wou_status;
+            $_SESSION['libSession']['vnumber'] = $uid;
+        }
+    } else {
+        //print 'PROXY';
         //authenticate and get the base info from EZPROXY. This is based on the great post by Brice Stacey at: http://bricestacey.com/2009/07/21/Single-Sign-On-Authentication-Using-EZProxy-UserObjects.html
         $url = "{$token}&service=getUserObject&wskey={$OCLCwskey}&from_proxy=yes";
         $obj = getUserObject($url);
@@ -101,47 +97,44 @@ function authenticatePerson($login, $from_proxy, $token)
         $xml = new SimpleXmlElement($obj, LIBXML_NOCDATA);
         //print_r($xml);
         //this is all very ugly. I hate XML.
-        if((string) $xml->userDocument->emailAddress == '@wou.edu'){
-			//print_r($xml->userDocument->emailAddress);
-			//print $login;
-			authenticatePerson($login, 'no', null);
-		}
-        else
-        {
-			foreach ($xml->userDocument->children() as $child) {
-				$iVarName  = (string)$child->getName();
-				if($child->children()){
-					foreach ($child->children() as $session_var) {
-						$iVarName              = (string)$session_var->getName();
-						$$iVarName             = (string)$session_var;
-						$info_array[$iVarName] = $session_var;
-					}
-				}
-				else
-				{
-					$$iVarName = (string)$child;
-				}
-			}
-			$_SESSION['libSession']['firstname'] = !empty($forename) ? $forename : (empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : '');
-			$_SESSION['libSession']['lastname'] = $surname;!empty($surname) ? $surname : (empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : '');
-			$_SESSION['libSession']['IDnumber'] = !empty($uid) ? $uid : (empty($_SESSION['libSession']['IDnumber']) ? $_SESSION['libSession']['IDnumber'] : '');
-			$_SESSION['libSession']['ptype'] = !empty($category) ? $category : (empty($_SESSION['libSession']['ptype']) ? $_SESSION['libSession']['ptype'] : '');
-			$_SESSION['libSession']['vnumber'] = !empty($uid) ? $uid : (empty($_SESSION['libSession']['vnumber']) ? $_SESSION['libSession']['vnumber'] : '');
-			$name = !empty($forename) ? $forename . ' ' : '';
-			$name .= !empty($surname) ? $surname : '';
-			$IDnumber = !empty($uid) ? $uid : '';
-			$univID   = !empty($note1) ? $note1 : $IDnumber;
-		}
+        if ((string) $xml->userDocument->emailAddress == '@wou.edu') {
+            //print_r($xml->userDocument->emailAddress);
+            //print $login;
+            authenticatePerson($login, 'no', null);
+        } else {
+            foreach ($xml->userDocument->children() as $child) {
+                $iVarName  = (string)$child->getName();
+                if ($child->children()) {
+                    foreach ($child->children() as $session_var) {
+                        $iVarName              = (string)$session_var->getName();
+                        $$iVarName             = (string)$session_var;
+                        $info_array[$iVarName] = $session_var;
+                    }
+                } else {
+                    $$iVarName = (string)$child;
+                }
+            }
+            $_SESSION['libSession']['firstname'] = !empty($forename) ? $forename : (empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : '');
+            $_SESSION['libSession']['lastname'] = $surname;
+            !empty($surname) ? $surname : (empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : '');
+            $_SESSION['libSession']['IDnumber'] = !empty($uid) ? $uid : (empty($_SESSION['libSession']['IDnumber']) ? $_SESSION['libSession']['IDnumber'] : '');
+            $_SESSION['libSession']['ptype'] = !empty($category) ? $category : (empty($_SESSION['libSession']['ptype']) ? $_SESSION['libSession']['ptype'] : '');
+            $_SESSION['libSession']['vnumber'] = !empty($uid) ? $uid : (empty($_SESSION['libSession']['vnumber']) ? $_SESSION['libSession']['vnumber'] : '');
+            $name = !empty($forename) ? $forename . ' ' : '';
+            $name .= !empty($surname) ? $surname : '';
+            $IDnumber = !empty($uid) ? $uid : '';
+            $univID   = !empty($note1) ? $note1 : $IDnumber;
+        }
         //go finish populating the record in Alma
         if (!empty($IDnumber) || !empty($login)) {
-			$sTerm = !empty($IDnumber) ? $IDnumber : $login;
-			//print $sTerm;
+            $sTerm = !empty($IDnumber) ? $IDnumber : $login;
+            //print $sTerm;
             $queryParams   = '?' . urlencode('apikey') . '=' . urlencode($apikey);
             $service_url   = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/' . $sTerm;
             //user CURL to get record
             $curl_response = getAlmaRecord($_REQUEST['pid'], $service_url, $queryParams);
             $patronRecord  = json_decode($curl_response);
-           //print_r($patronRecord);
+            //print_r($patronRecord);
             foreach ($patronRecord->contact_info->address as $key => $mailing) {
                 $addresses[$key]['preferred'] = !empty($mailing->preferred) ? $mailing->preferred : '';
                 $addresses[$key]['city']      = !empty($mailing->city) ? $mailing->city : '';
@@ -191,7 +184,7 @@ function authenticatePerson($login, $from_proxy, $token)
     }
     //if we have the info, set the session
     if (sizeof($emails) > 0 || !empty($IDnumber)) {
-		$_SESSION['libSession']['firstname'] = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : $forename;
+        $_SESSION['libSession']['firstname'] = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : $forename;
         $_SESSION['libSession']['lastname'] = !empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : $surname;
         $_SESSION['libSession']['IDnumber'] = !empty($_SESSION['libSession']['IDnumber']) ? $_SESSION['libSession']['IDnumber'] : $uid;
         $_SESSION['libSession']['ptype'] = !empty($_SESSION['libSession']['ptype']) ? $_SESSION['libSession']['ptype'] : $category;
@@ -203,7 +196,7 @@ function authenticatePerson($login, $from_proxy, $token)
         $_SESSION['libSession']['ptype']     = !empty($category) ? $category : (!empty($_SESSION['libSession']['ptype']) ? $_SESSION['libSession']['ptype'] : '');
         if (empty($email) && !empty($emails)) {
             foreach ($emails as $k => $v) {
-                if ($v['preferred'] == true || $v['preferred'] == 1 || (str_match($emailDomain, $v['email_address']) && empty($email))) {
+                if ($v['preferred'] == true || $v['preferred'] == 1 || (str_contains($v['email_address'], $emailDomain) && empty($email))) {
                     $email = $v['email_address'];
                 }
                 unset($k, $v);
@@ -269,8 +262,7 @@ function authenticate($login, $from_proxy, $token)
         unset($xml);
         $IDnumber = !empty($uid) ? $uid : '';
         $univID   = !empty($note1) ? $note1 : $IDnumber;
-    }
-    else {
+    } else {
 
         $IDnumber = $viewas;
     }
@@ -392,6 +384,11 @@ function getUserObject($url)
     //print_r($o);
     return $o;
 }
+function viewUserObject($url)
+{
+    $object = getUserObject($url);
+    print $object;
+}
 //set a text patron status based on numerical return
 function getPatronCategory($category)
 {
@@ -462,4 +459,3 @@ function getPatronCategory($category)
     }
     return $univStatus;
 }
-?>
