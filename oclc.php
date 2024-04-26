@@ -14,7 +14,7 @@ if (!empty($oclcnum) || !empty($_REQUEST['oclcnum'])) {
     }
     $isn = 'issn/' . $issn;
 }
-include_once($_SERVER['DOCUMENT_ROOT'] . '/webFiles/Alma_Primo/APIRequestFormAlma/privateFunctions.php'); //privateFunctions is a poorly named file that includes variables for our APIkey, wskey, and URL for verification of patron hotspot eligibility
+include_once($_SERVER['DOCUMENT_ROOT'] . '/webFiles/Alma_Primo/APIRequestFormAlma/vars/privateVar.php'); //file that includes variables for our APIkey, wskey, and URL for verification of patron hotspot eligibility
 $oclc_url   = "https://www.worldcat.org/webservices/catalog/content/$isn?wskey=$wskey"; //wskey is unique to the institution
 //&format=json';
 //I hate XML with a firey passion. Please give me JSON.

@@ -1,6 +1,6 @@
 <?php
 //functions called by the pages/scripts
-$queryParams = '?' . urlencode('apikey') . '=' . urlencode($apikey);
+$queryParams = "?apikey={$apikey}";
 function getAlmaRecord($pid, $service_url, $queryParams)
 {
     $curl        = curl_init();
@@ -16,7 +16,37 @@ function getAlmaRecord($pid, $service_url, $queryParams)
     curl_close($curl);
     return $curl_response;
 }
-
+function getAlmaPatronRecord($service_url, $queryParams)
+{
+    $curl        = curl_init();
+    curl_setopt($curl, CURLOPT_URL, $service_url . $queryParams);
+    curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'GET');
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($curl, CURLOPT_FOLLOWLOCATION, TRUE);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+        'Accept: application/json',
+        'Content-Type: application/json'
+    ));
+    $curl_response = curl_exec($curl);
+    curl_close($curl);
+    return $curl_response;
+}
+function getAlmaItemRecordByBarcode($barcode, $service_url, $queryParams)
+{
+    $queryParams .= "&item_barcode={$barcode}";
+    $curl        = curl_init();
+    curl_setopt($curl, CURLOPT_URL, $service_url . $queryParams);
+    curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'GET');
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($curl, CURLOPT_FOLLOWLOCATION, TRUE);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+        'Accept: application/json',
+        'Content-Type: application/json'
+    ));
+    $curl_response = curl_exec($curl);
+    curl_close($curl);
+    return $curl_response;
+}
 function getAlmaAvailability($url, $queryParams)
 {
     $itemsParams = $queryParams . '&limit=100';

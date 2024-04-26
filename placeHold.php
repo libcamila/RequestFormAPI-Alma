@@ -1,52 +1,55 @@
 <?php
-/*
-ini_set('display_errors', 1);
+// this page is called after form submission to place the request
+//update_address MAY be called before it, but not unless patron is updating address or phone
+/*ini_set('display_errors', 1);
 error_reporting(E_ERROR | E_WARNING | E_PARSE);
 ini_set('display_errors', '1');
 */
+include_once('vars/resourceSharingClass.php');
 //place the hold and indicate pickup location
 //we must have a session to store to
 if (!isset($_SESSION)) {
 	session_start();
 } //this has to stay or CC/grad/senate, etc won't load right
 //not a hotspot request, include the login info
-include_once('privateFunctions.php'); //privateFunctions is a poorly named file that includes variables for our APIkey, wskey, and URL for verification of patron hotspot eligibility
-include_once('functions.php');
-//variables that are pulled from the URL sent by the General Electronic Service are in the parameters file along with other non-secret params
-include_once('parameters.php');
+include_once('vars/privateVar.php');
+include_once('vars/parameters.php');
+include_once('functions/functions.php');
 if (empty($req_type) || $req_type != 'hotspot') {
-	include_once($_SERVER['DOCUMENT_ROOT'] . '/webFiles/login/top.php');
+	//SSO integration
+	//sets $_SESSION['libSession] based on SAML and Alma attributes
+	//our SAML data does not return an expiration date, so I have used the API to gather that as part of the login process for this and EZProxy
+	include_once('functions/authenticationFunctions.php'); // Camila, uncomment this when you try to make this live tomorrow (and get rid o functions above??)
+	include_once('authenticateNew.php');
 	if (isset($_REQUEST['viewas'])) {
 		include($_SERVER['DOCUMENT_ROOT'] . '/webFiles/login/viewas.php');
 	}
-	$doSend = 'yes';
-	$echoResponse = 'no';
-	//for CG Testing
-	if ($pid == 'V00016181') {
-		//$doSend = 'no';
-		//$echoResponse = 'yes';
-	}
-
-?>
-	<html>
-
-	<head>
-		<style>
-			body,
-			p,
-			div {
-				font-family: Arial, Helvetica, sans-serif;
-				font-family: 'Open Sans', sans-serif;
-				background-color: transparent;
-			}
-		</style>
-	</head>
-
-	<body>
-	<?php
-	print '<div style="padding:2em;">';
+}
+print "<html>";
+if (empty($req_type) || $req_type != 'hotspot') {
+	print "<head>
+    <style>
+        body,p,div {
+        font-family: Arial, Helvetica, sans-serif;
+        font-family: 'Open Sans', sans-serif;
+        background-color: transparent;
+        }
+    </style>
+</head>
+<body>
+   <div style=\"padding:2em;\">";
 } else {
-	print "<html><body>";
+	print "<body>";
+}
+//variables that are pulled from the URL sent by the General Electronic Service are in the parameters file along with other non-secret params
+include_once('vars/parameters.php');
+//send the form?
+$doSend = 'yes';
+$echoResponse = 'no';
+//for CG Testing
+if ($pid == $adminVnumber) {
+	//$doSend = 'no';
+	$echoResponse = 'yes';
 }
 if (!empty($pickupLibrary)) {
 	$pickupLocation = $pickupLibrary;
@@ -60,63 +63,60 @@ if (!empty($pickupLibrary)) {
 // We DO NOT WANTt item level holds on hotspots or tablets.//
 if (empty($req_type) || (!preg_match('/summit/i', $req_type) && !preg_match('/Interlibrary/i', $req_type) && !preg_match('/hotspot/i', $req_type)) && !empty($barcode)) {
 	$service_url   = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/items';
-	$curl_response = getAlmaRecord($pid, $service_url, $queryParams);
+	$curl_response = getAlmaItemRecordByBarcode($barcode, $service_url, $queryParams);
 	//print $curl_response;
 	$bib           = json_decode($curl_response, true);
-	//print_r($bib);
 	$mmsid = !empty($bib['bib_data']['mms_id']) ? $bib['bib_data']['mms_id'] : (!empty($mmsid) ? $mmsid : (!empty($mms_id) ? $mms_id : null));
 	$hid   = !empty($bib['holding_data']['holding_id']) ? $bib['holding_data']['holding_id'] : null;
 	$iid   = !empty($bib['item_data']['pid']) ? $bib['item_data']['pid'] : null;
 	$itemDescription   = !empty($bib['item_data']['description']) ? $bib['item_data']['description'] : null;
 }
 $sendToAddress = '';
-$makeRequest = new stdClass();
-$makeRequest->request_type = "HOLD";
-$makeRequest->description = $itemDescription;
-$makeRequest->pickup_location_type = "LIBRARY";
-$makeRequest->pickup_location_library = $pickupLibrary;
-$makeRequest->pickup_location_circulation_desk = null;
-$makeRequest->pickup_location_institution = null;
-$makeRequest->material_type->value = null;
-$makeRequest->comment = "Item to be picked up at {$pickupLocation}";
-$makeRequest->mms_id = !empty($mmsid) ? $mmsid : (!empty($mms_id) ? $mms_id : '');
-
+$makeRequest = new holdRequest();
+$makeRequest->set_param('description', $itemDescription);
+$makeRequest->set_param('pickup_location_library', $pickupLibrary);
+$makeRequest->set_param('comment', "Item to be picked up at {$pickupLocation}");
+$makeRequest->set_param('mms_id', !empty($mmsid) ? $mmsid : (!empty($mms_id) ? $mms_id : ''));
 //make an array to update the address/phone. Still hacky, but whatever.
 if (!empty($mailTo)) {
-	$makeRequest->pickup_location_type = 'USER_HOME_ADDRESS';
+	$makeRequest->set_param('pickup_location_type', 'USER_HOME_ADDRESS');
 	$addressNo                           = !empty($mailTo) ? str_replace('Use Address ', '', $mailTo) : 1;
 	$addressNo                           = $addressNo - 1;
-	$makeRequest->comment             = 'Send to this address ';
-	$makeRequest->comment .= !empty($mailTo) ? '(Patron ' . str_replace('Use ', '', $mailTo) . '): ' : ': ';
+	$addressDets = 'Send to this address ';
+	$addressDets .= !empty($mailTo) ? '(Patron ' . str_replace('Use ', '', $mailTo) . '): ' : ': ';
 	if (!empty($mailTo)) {
 		$sendToAddress = $line1 . ' ' . (!empty($line2) ? $line2 . ' ' : '') . ' ' . $city . ', ' . $state . ' ' . $zip . ' ';
 	} elseif (!empty($mailTo)) {
 		$sendToAddress = $_SESSION['woulib']['addresses'][$addressNo]['line'][0] . ' ' . (!empty($_SESSION['woulib']['addresses'][$addressNo]['line'][1]) ? $_SESSION['woulib']['addresses'][$addressNo]['line'][1] . ' ' : '') . $_SESSION['woulib']['addresses'][$addressNo]['city'] . ', ' . $_SESSION['woulib']['addresses'][$addressNo]['state'] . ' ' . $_SESSION['woulib']['addresses'][$addressNo]['zip'];
 	}
-	$makeRequest->comment .= $sendToAddress;
+	$addressDets .= $sendToAddress;
+	$makeRequest->set_param('comment', $sendToAddress);
 }
 
 //reset $queryParams to default
-$queryParams = '?' . urlencode('apikey') . '=' . urlencode($apikey);
+$queryParams = "?apikey={$apikey}";
+//for some reason pid got lost. reset if needed
+$pid = !empty($pid) ? $pid : $_SESSION['libSession']['vnumber'];
 //non-summit requests, create a hold
 if (empty($req_type) || (!preg_match('/summit/i', $req_type) && !preg_match('/Interlibrary/i', $req_type) && $req_type != 'ill')) {
 	//print '<p>Hold request</p>';
 	//we have a holding Id and it isn't a hotspot, the URL should go to the item level
 	if ((empty($req_type) || $req_type != 'hotspot' || $mmsid == '99900391873201856') && !empty($hid) && !empty($itemDescription)) {
-		//print "ITEM";
-		$queryParams .= '&' . urlencode('user_id') . '=' . urlencode($pid);
-		$service_url = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/bibs/' . $mmsid . '/holdings/' . $hid . '/items/' . $iid;
+		//we know who the patron is and are placing an item-level request
+		$service_url = "https://api-na.hosted.exlibrisgroup.com/almaws/v1/bibs/{$mmsid}/holdings/{$hid}/items/{$iid}";
+		$queryParams .= "&user_id={$pid}";
 	} else {
-		//print "BIB";
+
 		//we know who the patron is and are placing a bib-level request
-		$service_url = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/' . $pid; //$_REQUEST['viewas'];
-		$queryParams .= '&user_id_type=all_unique&mms_id=' . $mmsid;
+		$service_url = "https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/{$pid}"; //$_REQUEST['viewas'];
+		$queryParams .= "&user_id_type=all_unique&mms_id={$mmsid}";
 	}
+	//either way, tag requests on the end
 	$service_url .= '/requests';
-	$makeRequest   = json_encode($makeRequest, JSON_PRETTY_PRINT);
+	$request   = json_encode($makeRequest, JSON_PRETTY_PRINT);
 	//user CURL to place hold
 	if ($doSend == 'yes') {
-		$curl_response = postAlmaHold($makeRequest, $service_url, $queryParams);
+		$curl_response = postAlmaHold($request, $service_url, $queryParams);
 	}
 }
 //summit request, create a resource sharing request
@@ -158,7 +158,7 @@ elseif (!empty($req_type) && (preg_match('/summit/i', $req_type) || preg_match('
 	$thisRequest->set_value('level_of_service', (!empty($_REQUEST['lolr']) && $_REQUEST['lolr'] == 'Yes') ? 'WHEN_CONVINIENT' : null);
 	$thisRequest->set_pickup_location($pickupLibrary);
 	$thisRequest->set_preferred_send_method((!empty($reqFormat) && $reqFormat == 'copy') ? 'EMAIL' : 'MAIL');
-	$thisRequest->last_interest_date = $needby;
+	$thisRequest->set_param('last_interest_date', $needby);
 	if (preg_match('/Interlibrary/i', $req_type) || $req_type == 'ill' || $reqFormat == 'copy') {
 		$thisRequest->set_value('partner', 'OCLC');
 	}
@@ -194,6 +194,7 @@ $result = json_decode($curl_response, true);
 if ($doSend == 'no') {
 	print '<p>REQUEST NOT PLACED FOR TESTING!!!</p>';
 	$curl_response = $request;
+	$result = json_decode($curl_response, true); // we don't have a result, so set it to the request
 }
 if ($echoResponse == 'yes') {
 
@@ -261,111 +262,97 @@ else if ((!isset($result['errorsExist']) || $result['errorsExist'] != true) && !
 }
 //if we haven't alredy included this, make sure our page has the styles, etc.
 if (empty($req_type) || $req_type != 'hotspot') {
-	?>
-		<style>
-			/*Chat CSS*/
-			/* Button used to open the chat form - fixed at the bottom of the page */
-			.open-button {
-				background-color: #555;
-				color: white !important;
-				padding: 16px 20px;
-				border: none;
-				cursor: pointer;
-				opacity: 0.8;
-				/* position: fixed;
+?>
+	<style>
+		/*Chat CSS*/
+		/* Button used to open the chat form - fixed at the bottom of the page */
+		.open-button {
+			background-color: #555;
+			color: white !important;
+			padding: 16px 20px;
+			border: none;
+			cursor: pointer;
+			opacity: 0.8;
+			/* position: fixed;
 	  bottom: 60px;
 	  right: 0px;*/
-				width: 280px;
-				font-size: large;
-				max-height: 4em;
-				z-index: 8;
-			}
+			width: 280px;
+			font-size: large;
+			max-height: 4em;
+			z-index: 8;
+		}
 
-			/* The popup chat - hidden by default */
-			.chat-popup {
-				display: none;
-				/* position: fixed;
+		/* The popup chat - hidden by default */
+		.chat-popup {
+			display: none;
+			/* position: fixed;
 	  bottom: 60px;
 	  right: 15px; */
-				border: 3px solid #f1f1f1;
-				height: 325px;
-				width: 350px;
-				z-index: 9;
-				background-color: white;
-				overflow: visible;
-				opacity: .95;
+			border: 3px solid #f1f1f1;
+			height: 325px;
+			width: 350px;
+			z-index: 9;
+			background-color: white;
+			overflow: visible;
+			opacity: .95;
+		}
+
+		.topBar {
+			width: 100%;
+			font-size: larger;
+			font-weight: bold;
+		}
+
+		.chat-popup button {
+			background: #dbdbdb !important;
+			margin: .25em !important;
+		}
+
+		@media (max-device-width:480px) {
+
+			.chat-popup,
+			.open-button {
+				bottom: 0px;
 			}
 
-			.topBar {
-				width: 100%;
-				font-size: larger;
-				font-weight: bold;
+			.open-button {
+				font-size: normal;
 			}
 
-			.chat-popup button {
-				background: #dbdbdb !important;
-				margin: .25em !important;
+			.open-button img {
+				width: auto !important;
+				height: 1em !important;
 			}
+		}
 
-			@media (max-device-width:480px) {
-
-				.chat-popup,
-				.open-button {
-					bottom: 0px;
-				}
-
-				.open-button {
-					font-size: normal;
-				}
-
-				.open-button img {
-					width: auto !important;
-					height: 1em !important;
-				}
-			}
-
-			/*end chat css*/
-		</style>
-		<p style="padding-top:1em;">To view and manage your requests, visit the <a href="https://library.wou.edu/my-library/">My Library</a> page.</p>
-		<h3>Questions?</h3>
-		<div class="open-button" onclick="openForm()" id="chatButton"><img align="top" alt="Click to chat with WOULibrary" border="0" class="photo_noborder" id="wou_chat" src="//library.wou.edu/webFiles/images/buttons/bubble.png" style="max-height:2em;vertical-align: middle;margin-right:.5em;" />Ask WOU Library</div>
-		<div class="chat-popup" id="myForm">
-			<div class="topBar"><button type="button" class="btn cancel" onclick="closeForm()">X</button> Ask WOU</div>
-			<div class="needs-js"><span style="font-size:small;" id="chatAway"></span><a href="mailto:libweb@wou.edu"><img alt="Click to email WOULibrary" border="0" id="wou_chat_away" src="//library.wou.edu/webFiles/images/buttons/envelope.png" style="max-height:2em;float:right;" /></a> We're offline, but you can email us (<a href="mailto:libweb@wou.edu">libweb@wou.edu</a>) and we'll get back to you as soon as we can. In the meantime, check our <strong><a href="https://woulibrary.ask.libraryh3lp.com/" target="_blank">FAQ</a></strong> to see it the answer to your question is there.</div>
-		</div>
-		<?php
-		print '</div>';
-		?>
-		<script>
-			/*jQuery(document).ready(function(){
-	jQuery(".chat-popup").show(0).delay(2500).fadeOut(3000);
-	jQuery(".open-button").hide(0).delay(2500).fadeIn(3000);
-	*/
-			/*jQuery(".open-button").animate({
-				opacity: 0.8
-			  }, 1500 );
-			jQuery(".chat-popup").hide(0).delay(4000).fadeIn(3000);*/
-			/*jQuery('.chat-popup').draggable();
-			jQuery('.open-button').draggable();
-			jQuery( ".chat-popup" ).resizable({
-				  helper: "ui-resizable-helper"
-				});
-			});*/
-			function openForm() {
-				document.getElementById("myForm").style.display = "block";
-				document.getElementById("chatButton").style.display = "none";
-			}
-
-			function closeForm() {
-				document.getElementById("myForm").style.display = "none";
-				document.getElementById("chatButton").style.display = "block";
-			}
-		</script>
-		<script src="https://woulibrary.ask.libraryh3lp.com/js/faq-embeddable/embed.js"></script>
-		<script src="https://libraryh3lp.com/js/libraryh3lp.js?15276"></script>
+		/*end chat css*/
+	</style>
+	<p style="padding-top:1em;">To view and manage your requests, visit the <a href="https://library.wou.edu/my-library/">My Library</a> page.</p>
+	<h3>Questions?</h3>
+	<div class="open-button" onclick="openForm()" id="chatButton"><img align="top" alt="Click to chat with WOULibrary" border="0" class="photo_noborder" id="wou_chat" src="//library.wou.edu/webFiles/images/buttons/bubble.png" style="max-height:2em;vertical-align: middle;margin-right:.5em;" />Ask WOU Library</div>
+	<div class="chat-popup" id="myForm">
+		<div class="topBar"><button type="button" class="btn cancel" onclick="closeForm()">X</button> Ask WOU</div>
+		<div class="needs-js"><span style="font-size:small;" id="chatAway"></span><a href="mailto:libweb@wou.edu"><img alt="Click to email WOULibrary" border="0" id="wou_chat_away" src="//library.wou.edu/webFiles/images/buttons/envelope.png" style="max-height:2em;float:right;" /></a> We're offline, but you can email us (<a href="mailto:libweb@wou.edu">libweb@wou.edu</a>) and we'll get back to you as soon as we can. In the meantime, check our <strong><a href="https://woulibrary.ask.libraryh3lp.com/" target="_blank">FAQ</a></strong> to see it the answer to your question is there.</div>
+	</div>
 	<?php
-}
+	print '</div>';
 	?>
-	</body>
+	<script>
+		function openForm() {
+			document.getElementById("myForm").style.display = "block";
+			document.getElementById("chatButton").style.display = "none";
+		}
 
-	</html>
+		function closeForm() {
+			document.getElementById("myForm").style.display = "none";
+			document.getElementById("chatButton").style.display = "block";
+		}
+	</script>
+	<script src="https://woulibrary.ask.libraryh3lp.com/js/faq-embeddable/embed.js"></script>
+	<script src="https://libraryh3lp.com/js/libraryh3lp.js?15276"></script>
+<?php
+}
+?>
+</body>
+
+</html>

@@ -1,17 +1,24 @@
 <?php
-//set new address/phone in Alma
-//we must have a session to store to
 if (!isset($_SESSION)) {
     session_start();
 } //this has to stay or CC/grad/senate, etc won't load right
-include_once('functions.php');
-include_once('privateFunctions.php'); //privateFunctions is a poorly named file that includes our APIkey, wskey, and URL for verification of patron hotspot eligibility
-//if we don't have a request type already, or we are reqyesting something that is not a hotspot (Google Form get data via apps script), include the login stuff
-if (empty($_REQUEST['req_type']) || $_REQUEST['req_type'] != 'hotspot') {
-    //authenticate
-    include_once($_SERVER['DOCUMENT_ROOT'] . '/webFiles/login/top.php');
+//not a hotspot request, include the login info
+include_once('vars/privateVar.php');
+include_once('functions/functions.php');
+if (empty($req_type) || $req_type != 'hotspot') {
+    //SSO integration
+    //sets $_SESSION['libSession] based on SAML and Alma attributes
+    //our SAML data does not return an expiration date, so I have used the API to gather that as part of the login process for this and EZProxy
+    include_once('functions/authenticationFunctions.php'); // Camila, uncomment this when you try to make this live tomorrow (and get rid o functions above??)
+    include_once('authenticateNew.php');
+    if (isset($_REQUEST['viewas'])) {
+        include($_SERVER['DOCUMENT_ROOT'] . '/webFiles/login/viewas.php');
+    }
 } else {
-    $_REQUEST['pid'] = !empty($_REQUEST['viewas']) ? $_REQUEST['viewas'] : '';
+
+    //variables that are pulled from the URL sent by the General Electronic Service are in the parameters file along with other non-secret params
+    include_once('vars/parameters.php');
+    //if(!empty($_REQUEST['viewas'])){$pid = $_REQUEST['viewas'];}
 ?>
     <html>
 
@@ -30,17 +37,14 @@ if (empty($_REQUEST['req_type']) || $_REQUEST['req_type'] != 'hotspot') {
     <body>
     <?php
 }
-//variables that are pulled from the URL sent by the General Electronic Service are in the parameters file along with other non-secret params
-include_once('parameters.php');
 if (!empty($_REQUEST['state']) && !empty($states[$_REQUEST['state']])) {
     $_REQUEST['state'] = $states[$_REQUEST['state']];
 }
-$queryParams = '?' . urlencode('apikey') . '=' . urlencode($apikey);
 //user CURL to get record
-$service_url = 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/' . $_REQUEST['pid'];
-$curl_response = getAlmaRecord($_REQUEST['pid'], $service_url, $queryParams);
-$patronRecord  = json_decode($curl_response);
-unset($curl_response);
+$service_url = "https://api-na.hosted.exlibrisgroup.com/almaws/v1/users/{$pid}";
+$patronResponse = getAlmaRecord($service_url, $queryParams);
+$patronRecord  = json_decode($patronResponse);
+unset($patronResponse);
 //this is all very ugly (done in a hurry). It should be cleaned up.
 //we have a new address sent from the form.
 if (!empty($_REQUEST['line1'])) {

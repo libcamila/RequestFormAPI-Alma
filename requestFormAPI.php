@@ -1,27 +1,27 @@
 <?php
-
+/*
 ini_set('display_errors', 1);
 error_reporting(E_ERROR | E_WARNING | E_PARSE);
-ini_set('display_errors', '1');
-
+ini_set('display_errors', '1');*/
 //the initial authentication and pull of data
 if (empty(session_id()) && !isset($_SESSION)  && session_status() == PHP_SESSION_NONE) {
 	session_start();
 }
-//include($_SERVER['DOCUMENT_ROOT'].'/webFiles/login/top.php');
-include_once('privateFunctions.php');
+include_once('vars/privateVar.php');
 //SSO integration
 //sets $_SESSION['libSession] based on SAML and Alma attributes
 //our SAML data does not return an expiration date, so I have used the API to gather that as part of the login process for this and EZProxy
-include_once('functions.php');
-include_once('authenticate.php');
-if (isset($_SESSION['woulib']) && !isset($_SESSION['libSession'])) {
-	$_SESSION['libSession'] = $_SESSION['woulib'];
-}
+include_once('functions/functions.php');
+include_once('functions/authenticationFunctions.php'); // Camila, uncomment this when you try to make this live tomorrow (and get rid o functions above??)
+include_once('authenticateNew.php');
 //I would like to eventually include this file, but it has a jquery dependency, so I'll need to add that first
 //include('viewas.php');
 //variables that are pulled from the URL sent by the General Electronic Service are in the parameters file along with other non-secret params
-include_once('parameters.php');
+include_once('vars/parameters.php');
+
+if (isset($_SESSION['woulib']) && !isset($_SESSION['libSession'])) {
+	$_SESSION['libSession'] = $_SESSION['woulib'];
+}
 //if the are a current patron
 if (isset($expires) && $expires > $now) {
 	//redirect to the Google form for Hotspots
@@ -44,10 +44,10 @@ if (isset($expires) && $expires > $now) {
 			$message .= '<input type="radio" name="formType" value="videoDigitization"> This be digitized and made embeddable in my Canvas or Moodle shell (videos only)</p>';
 		}
 		$message  .= "<input name=\"req_type\" type=\"hidden\" value=\"{$req_type}\">";
-		//only need this for requests that are holds (mailform && barcode)
-		/*$result = json_decode(getAlmaRecord($pid, 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/items', $queryParams));
+		//only need (want?) this for requests that are holds (mailform && barcode)
+		/*$result = json_decode(getAlmaItemRecord($barcode, 'https://api-na.hosted.exlibrisgroup.com/almaws/v1/items', $queryParams));
 		$url = $result->holding_data->link . '/items';
-		if ($req_type == 'hold' && !empty($_REQUEST['barcode'])) {
+		if ($req_type == 'hold' && !empty($barcode)) {
 			$availArray = getAlmaAvailability($url, $queryParams);
 			if ($availArray->available == 'no' && $availArray->equipment == 'no') {
 				$req_type = 'summit';

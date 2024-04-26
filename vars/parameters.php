@@ -1,52 +1,4 @@
 <?php
-class ResourceSharingRequestObject
-{
-    public $owner, $agree_to_copyright_terms;
-    public $format, $citation_type, $title, $chapter_title, $journal_title, $oclc_number, $volume, $issue, $issn, $isbn, $pmid, $doi, $author, $source, $year, $pages, $allow_other_formats, $pickup_location, $level_of_service, $preferred_send_method, $last_interest_date, $note;
-    public function __construct()
-    {
-        $this->note = '';
-        $this->owner = "WOU";
-        $this->agree_to_copyright_terms = true;
-        $this->allow_other_formats = true;
-    }
-    /*
-        $this->material_type = $material_type;
-        $this->comment = $comment;*/
-    function set_param($name, $value)
-    {
-        $this->{$name} = $value;
-    }
-    function set_value($name, $value)
-    {
-        $this->{$name}->value =  $value;
-    }
-    function set_format($format)
-    {
-        $this->format->desc = $format;
-        $this->format->value =  strtoupper($format);
-    }
-    function set_citation_type($format)
-    {
-        $this->citation_type->desc = $format == 'Digital' ? 'Article' : 'Book';
-        $this->citation_type->value = $format == 'Digital' ? 'CR' : 'BK';
-    }
-    function set_preferred_send_method($method)
-    {
-        $this->preferred_send_method->desc = true;
-        $this->preferred_send_method->value =  $method;
-    }
-    function set_pickup_location($pickupLibrary)
-    {
-        global $pickupLibraries;
-        $this->pickup_location->desc = $pickupLibraries[$pickupLibrary];
-        $this->pickup_location->value =  $pickupLibrary;
-    }
-    function set_level_of_service($level_of_service)
-    {
-        $this->level_of_service->value =  $level_of_service;
-    }
-}
 foreach ($_REQUEST as $k => $v) {
     if (!empty($v)) {
         $$k = $v;
@@ -100,7 +52,6 @@ $oclc_num = !empty($_REQUEST['oclcnum']) ? trim($_REQUEST['oclcnum']) : (!empty(
 $oclcnum = $oclc_num;
 $pages = !empty($_REQUEST['pages']) ? $_REQUEST['pages'] : (!empty($_REQUEST['rft.pages']) ? $_REQUEST['rft.pages'] : null);
 $pickupLibrary = !empty($_REQUEST['pickupLibrary']) ? $_REQUEST['pickupLibrary'] : null;
-$pid = !empty($_REQUEST['pid']) ? $_REQUEST['pid'] : null; //this is the vNumber
 $pmid = !empty($_REQUEST['pmid']) ? $_REQUEST['pmid'] : null;
 $reqFormat = !empty($_REQUEST['format']) ? strtolower(trim($_REQUEST['format'])) : (!empty($issn) && (preg_match('/interlibrary/i', $req_type) || preg_match('/ill/i', $req_type)) ? 'copy' : 'loan');
 $sid = !empty($_REQUEST['sid']) ? $_REQUEST['sid'] : (!empty($_REQUEST['rft.sid']) ? $_REQUEST['rft.sid'] : (!empty($_REQUEST['source']) ? $_REQUEST['source'] : (!empty($mmsid) ? 'Primo VE' : null)));
@@ -133,20 +84,19 @@ $now             = new DateTime();
 $expires         = DateTime::createFromFormat('m-d-Y', $_SESSION['libSession']['expiration']); // our expiration is saved in m-d-Y format, yours may be different
 
 //patron dets
-$firstname                = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : null;
-$lastname                 = !empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : null;
-$email                    = !empty($_SESSION['libSession']['email']) ? $_SESSION['libSession']['email'] : null;
-$IDnumber                  = !empty($_SESSION['libSession']['IDnumber']) ? $_SESSION['libSession']['IDnumber'] : null;
-$status                   = !empty($_SESSION['libSession']['status']) ? trim(stripslashes($_SESSION['libSession']['status'])) : null;
-$pid           = !empty($_REQUEST['vnumber']) ? trim($_REQUEST['vnumber']) : (!empty($_REQUEST['pid']) ? trim($_REQUEST['pid']) : $IDnumber); //get our patron identifier
+$firstname  = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : null;
+$lastname  = !empty($_SESSION['libSession']['lastname']) ? $_SESSION['libSession']['lastname'] : null;
+$email = !empty($_SESSION['libSession']['email']) ? $_SESSION['libSession']['email'] : null;
+$IDnumber = !empty($_SESSION['libSession']['IDnumber']) ? $_SESSION['libSession']['IDnumber'] : null;
+$status = !empty($_SESSION['libSession']['status']) ? trim(stripslashes($_SESSION['libSession']['status'])) : null;
+$pid = !empty($IDnumber) ? $IDnumber : (!empty($_SESSION['libSession']['univID']) ? $_SESSION['libSession']['univID'] : null); //this is the primary ID
+
 
 //If pickup was selected, where are they picking it up?
 $pickupLocation = '';
 $pickupLibrary = !empty($_REQUEST['pickupLibrary']) ? $_REQUEST['pickupLibrary'] : 'WOU';
 //if we have a description, we're going to need it to place the hold correctly
 $itemDescription = !empty($_REQUEST['description']) ? $_REQUEST['description'] : '';
-//encode the barcode, if applicable
-$queryParams .= !empty($_REQUEST['barcode']) ? '&' . urlencode('item_barcode') . '=' . urlencode($_REQUEST['barcode']) : null;
 $states      = array(
     'Alabama' => 'AL',
     'Alaska' => 'AK',
