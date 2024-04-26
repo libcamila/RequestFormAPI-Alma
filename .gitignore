@@ -1,3 +1,9 @@
-privateFunctions.php
+vars/privateVar.php
+privateVar.php
 authenticateNew.php
 oclcTest.php
+userAtt.php
+selfcheck.php
+jsonLogin.php
+getRecord.php
+viewas.php
