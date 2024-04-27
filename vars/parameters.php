@@ -78,10 +78,10 @@ $genre                    = $_REQUEST['request_type'];
 $hotspotURL = "https://library.wou.edu/hotspots/";
 $top_html             = '<style>input[type=text] {width:auto;}</style><div style="padding:1em;">
 <div style="width:100%;min-height:80px;text-align:left;margin-bottom:2em;" id="toplogo"><a href="https://library.wou.edu/" target="_blank"><img src="/webFiles/images/logos/woulib_logos/HL_logo_2Color_on_transparent.png" alt="WOU Library logo space" style="max-height:130px;"></a></div>';
+
 //get expiration from session variable
 $now             = new DateTime();
-//print_r($_SESSION['libSession']);
-$expires         = DateTime::createFromFormat('m-d-Y', $_SESSION['libSession']['expiration']); // our expiration is saved in m-d-Y format, yours may be different
+$expires         = DateTime::createFromFormat('m-d-Y', $_SESSION['libSession']['expires']); // our expiration is saved in m-d-Y format, yours may be different
 
 //patron dets
 $firstname  = !empty($_SESSION['libSession']['firstname']) ? $_SESSION['libSession']['firstname'] : null;
